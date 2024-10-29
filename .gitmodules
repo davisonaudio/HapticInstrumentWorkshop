@@ -1,0 +1,3 @@
+[submodule "firmware/TeensyPlatformIO/lib/audio-utils"]
+	path = firmware/TeensyPlatformIO/lib/audio-utils
+	url = https://github.com/davisonaudio/audio-utils.git
