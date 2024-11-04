@@ -148,25 +148,29 @@ void TransducerFeedbackCancellation::setAdmittanceFilter()
     //Stacked biquads
     admittance_filter.order = 3;
     Biquad temp;
-    temp.m_coefficients.a0 = 0.29781613;
-    temp.m_coefficients.a1 = 0.00272268;
-    temp.m_coefficients.a2 = 0;
-    temp.m_coefficients.b1 = 0;
-    temp.m_coefficients.b2 = 0;
+    Biquad::Coefficients temp_coefficients;
+    temp_coefficients.a0 = 0.29781613;
+    temp_coefficients.a1 = 0.00272268;
+    temp_coefficients.a2 = 0;
+    temp_coefficients.b1 = 0;
+    temp_coefficients.b2 = 0;
+    temp.setCoefficients(temp_coefficients);
     admittance_filter.biquads.push_back(temp);
 
-    temp.m_coefficients.a0 = 1;
-    temp.m_coefficients.a1 = -0.00933585;
-    temp.m_coefficients.a2 = 0;
-    temp.m_coefficients.b1 = -0.00242049;
-    temp.m_coefficients.b2 = -0.00095691;
+    temp_coefficients.a0 = 1;
+    temp_coefficients.a1 = -0.00933585;
+    temp_coefficients.a2 = 0;
+    temp_coefficients.b1 = -0.00242049;
+    temp_coefficients.b2 = -0.00095691;
+    temp.setCoefficients(temp_coefficients);
     admittance_filter.biquads.push_back(temp);
 
-    temp.m_coefficients.a0 = 1;
-    temp.m_coefficients.a1 = -1.99746549;
-    temp.m_coefficients.a2 = 0.99830338;
-    temp.m_coefficients.b1 = -1.96034539;
-    temp.m_coefficients.b2 = 0.9612116;
+    temp_coefficients.a0 = 1;
+    temp_coefficients.a1 = -1.99746549;
+    temp_coefficients.a2 = 0.99830338;
+    temp_coefficients.b1 = -1.96034539;
+    temp_coefficients.b2 = 0.9612116;
+    temp.setCoefficients(temp_coefficients);
     admittance_filter.biquads.push_back(temp);
 }
 
