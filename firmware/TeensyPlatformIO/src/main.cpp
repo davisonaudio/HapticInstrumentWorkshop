@@ -8,6 +8,7 @@
 
 #include "TransducerFeedbackCancellation.h"
 #include "ForceSensing.h"
+#include "TeensyEeprom.h"
 
 #define RESONANT_FREQ_HZ 380
 
