@@ -27,13 +27,16 @@ class TeensyEeprom
         enum class FloatParameters
         {
             RESONANT_FREQUENCY_HZ = 0,
-            RESONANT_Q,
             RESONANT_GAIN_DB,
-            BROADBAND_GAIN_DB,
+            RESONANT_Q,
             TONE_LEVEL_DB,
+            INDUCTANCE_FILTER_COEFFICIENT,
+            BROADBAND_GAIN_DB,
+            SAMPLE_RATE_HZ,
+            UNDAMPED_CALIBRATION_VALUE,
+            DAMPED_CALIBRATION_VALUE,
 
             NUM_FLOAT_PARAMETERS
-
         };
 
         enum class ByteParameters
@@ -51,7 +54,7 @@ class TeensyEeprom
         {
             EEPROM.write(getEepromAddress(byte_parameter), value);
         }
-        uint8_t readByte(ByteParameters byte_parameter)
+        uint8_t read(ByteParameters byte_parameter)
         {
             return EEPROM.read(getEepromAddress(byte_parameter));
         }
@@ -61,7 +64,7 @@ class TeensyEeprom
             writeFloat(getEepromAddress(float_parameter), value);
         }
 
-        float readFloat(FloatParameters float_parameter)
+        float read(FloatParameters float_parameter)
         {
             return readFloat(getEepromAddress(float_parameter));
         }

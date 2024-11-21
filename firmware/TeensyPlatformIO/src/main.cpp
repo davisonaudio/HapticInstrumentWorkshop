@@ -46,6 +46,7 @@ bool configured = false;
 TransducerFeedbackCancellation transducer_processing;
 ForceSensing force_sensing;
 Biquad meter_filter;
+TeensyEeprom teensy_eeprom;
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
@@ -131,7 +132,15 @@ void loop() {
     bp_outL_usb = queue_outL_usb.getBuffer();
     bp_outR_usb = queue_outR_usb.getBuffer();
 
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {        
+    //Get User's volume setting
+    float volume_level = usb_in.volume(); //0.0 - 1.0
+
+    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
+
+        //Apply volume level
+        buf_inL_usb[i] *= volume_level;
+        buf_inR_usb[i] *= volume_level;
+
         TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
         /*unprocessed.output_to_transducer = audioRead(context, n, INPUT_ACTUATION_SIGNAL_PIN);
         unprocessed.input_from_transducer = audioRead(context, n, INPUT_VOLTAGE_PIN);
@@ -152,9 +161,6 @@ void loop() {
 
         //force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
 
-        // rectify and filter signal for GUI meter
-        /*sample_t input_feedback_removed_rectified = abs(processed.input_feedback_removed);  
-        sample_t input_feedback_removed_rectified_lowpass = meter_filter.process(input_feedback_removed_rectified);*/
     }
 
     // Play output buffers. Retry until success.
@@ -171,9 +177,20 @@ void loop() {
         Serial.println("Play usb right fail.");
     }
 
-    if(numbuf >= 1000){
-        //Serial.printf("%d microseconds\n",  micros() - starttime);
-        numbuf = 0;
-    }
+}
+
+void readAndApplyEepromParameters()
+{
+        // sample_t resonant_frequency_hz;
+        // sample_t resonance_peak_gain_db;
+        // sample_t resonance_q;
+        // sample_t resonance_tone_level_db;
+        // sample_t inductance_filter_coefficient;
+        // sample_t transducer_input_wideband_gain_db;
+        // sample_t sample_rate_hz;
+        // AmplifierType amplifier_type;
+        // bool lowpass_transducer_io = true;
+    TransducerFeedbackCancellation::Setup cancellation_setup;
+    cancellation_setup.resonant_frequency_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ);
 
 }
