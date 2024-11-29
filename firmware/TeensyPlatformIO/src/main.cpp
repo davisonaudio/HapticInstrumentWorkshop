@@ -10,7 +10,7 @@
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
 
-#define RESONANT_FREQ_HZ 380
+#define RESONANT_FREQ_HZ 89.0
 
 //Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
 // GUItool: begin automatically generated code
@@ -84,13 +84,13 @@ void setup() {
 
     TransducerFeedbackCancellation::Setup processing_setup;
     processing_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
-    processing_setup.resonance_peak_gain_db = 23.5;
-    processing_setup.resonance_q = 16.0;
-    processing_setup.resonance_tone_level_db = -10.0;
+    processing_setup.resonance_peak_gain_db = -18.3;
+    processing_setup.resonance_q = 10.0;
+    processing_setup.resonance_tone_level_db = -100.0;
     processing_setup.inductance_filter_coefficient = 0.5;
-    processing_setup.transducer_input_wideband_gain_db = -8.36706445514;
+    processing_setup.transducer_input_wideband_gain_db = 0.0;
     processing_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
-    processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::VOLTAGE_DRIVE;
+    processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     transducer_processing.setup(processing_setup);
 
     queue_inL_usb.begin();
@@ -104,16 +104,14 @@ int16_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
 int16_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
 int16_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 
-int numbuf = 0;
-int starttime = 0;
 void loop() {
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
     // Wait for all channels to have content
     while (!queue_inL_usb.available() || !queue_inR_usb.available()
         || !queue_inL_i2s.available() || !queue_inR_i2s.available());
-    starttime = micros();
-    numbuf++;
+
+
     //Copy queue input buffers
     memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(short)*AUDIO_BLOCK_SAMPLES);
     memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(short)*AUDIO_BLOCK_SAMPLES);
@@ -156,8 +154,8 @@ void loop() {
 
         bp_outL_i2s[i] = processed.output_to_transducer;
         bp_outR_i2s[i] = processed.output_to_transducer;
-        bp_outL_usb[i] = processed.input_feedback_removed * 10;
-        bp_outR_usb[i] = unprocessed.reference_input_loopback;
+        bp_outL_usb[i] = processed.input_feedback_removed;
+        bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
 
         //force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
 
