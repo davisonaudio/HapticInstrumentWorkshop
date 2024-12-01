@@ -64,10 +64,11 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     myTimer.begin(blinkLED, 1000000);  
 
-    // Enable the serial port for debugging
+    // Enable the USB serial port for debugging
     Serial.begin(9600);
     Serial.println("Started");
 
+    //Configure amp IC over i2d
     max98389 max;
     max.begin(400 * 1000U);
     // Check that we can see the sensor and configure it.
@@ -77,11 +78,12 @@ void setup() {
     } else {
         Serial.println("Not configured");
     }
+
     AudioMemory(512);
     sgtl5000_1.enable();
     sgtl5000_1.volume(0.5);
 
-
+    //Setup feedback cancellation
     TransducerFeedbackCancellation::Setup processing_setup;
     processing_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
     processing_setup.resonance_peak_gain_db = -18.3;
@@ -135,30 +137,24 @@ void loop() {
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
 
-        //Apply volume level
+        //Apply volume level (simple linear scaling currently - could be improved)
         buf_inL_usb[i] *= volume_level;
         buf_inR_usb[i] *= volume_level;
 
         TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
-        /*unprocessed.output_to_transducer = audioRead(context, n, INPUT_ACTUATION_SIGNAL_PIN);
-        unprocessed.input_from_transducer = audioRead(context, n, INPUT_VOLTAGE_PIN);
-        unprocessed.reference_input_loopback = 5 * audioRead(context, n, INPUT_LOOPBACK_PIN);*/
+
         unprocessed.output_to_transducer = buf_inL_usb[i];
         unprocessed.input_from_transducer = buf_inR_i2s[i]; //Current measurement from amp
         unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
-
-        /*audioWrite(context, n, OUTPUT_AMP_PIN, processed.output_to_transducer * 0.2);
-        audioWrite(context, n, OUTPUT_LOOPBACK_PIN, processed.output_to_transducer * 0.2);
-        audioWrite(context, n, OUTPUT_PICKUP_SIGNAL_PIN, processed.input_feedback_removed);*/
 
         bp_outL_i2s[i] = processed.output_to_transducer;
         bp_outR_i2s[i] = processed.output_to_transducer;
         bp_outL_usb[i] = processed.input_feedback_removed;
         bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
 
-        //force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
-
+        force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
+        //TODO: Get force sense reading and send over MIDI (print initially)
     }
 
     // Play output buffers. Retry until success.
