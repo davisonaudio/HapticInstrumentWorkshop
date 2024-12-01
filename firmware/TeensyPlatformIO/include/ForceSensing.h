@@ -78,6 +78,17 @@ private:
 /*
  * ForceSensing Implementation
  */
+void ForceSensing::setup()
+{
+    GoertzelAlgorithm::SetupParameters setup_parameters;
+    setup_parameters.sample_rate = AUDIO_SAMPLE_RATE_EXACT;
+    setup_parameters.target_frequency = 440.0;
+    setup_parameters.window_size_periods = 1;
+
+    m_actuation_signal_goertzel.setup(setup_parameters);
+    m_sensed_signal_goertzel.setup(setup_parameters);
+}
+
 void ForceSensing::setResonantFrequencyHz(sample_t resonant_freq_hz)
 {
     m_actuation_signal_goertzel.setTargetFrequencyHz(resonant_freq_hz);

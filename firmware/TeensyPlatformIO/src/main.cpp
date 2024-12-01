@@ -95,6 +95,10 @@ void setup() {
     processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     transducer_processing.setup(processing_setup);
 
+    //Setup force sensing
+    force_sensing.setRawDebugPrint(true); //Debug printing for calibration
+    force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
+
     queue_inL_usb.begin();
     queue_inR_usb.begin();
     queue_inL_i2s.begin();
