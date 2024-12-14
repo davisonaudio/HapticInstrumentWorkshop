@@ -65,10 +65,10 @@ void setup() {
     myTimer.begin(blinkLED, 1000000);  
 
     // Enable the USB serial port for debugging
-    Serial.begin(9600);
+    Serial.begin(115200);
     Serial.println("Started");
 
-    //Configure amp IC over i2d
+    //Configure amp IC over i2c
     max98389 max;
     max.begin(400 * 1000U);
     // Check that we can see the sensor and configure it.
@@ -88,14 +88,17 @@ void setup() {
     processing_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
     processing_setup.resonance_peak_gain_db = -18.3;
     processing_setup.resonance_q = 10.0;
-    processing_setup.resonance_tone_level_db = -100.0;
+    processing_setup.resonance_tone_level_db = -10.0;
     processing_setup.inductance_filter_coefficient = 0.5;
     processing_setup.transducer_input_wideband_gain_db = 0.0;
     processing_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     transducer_processing.setup(processing_setup);
 
+    transducer_processing.setOscillatorFrequencyHz(500.0);
+
     //Setup force sensing
+    force_sensing.setup();
     force_sensing.setRawDebugPrint(true); //Debug printing for calibration
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
 
@@ -110,7 +113,12 @@ int16_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
 int16_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
 int16_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 
+unsigned long total_sample_count = 0;
+
 void loop() {
+
+    static ToneGenerator tone_gen(500.0, 44100, -10.0);
+
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
     // Wait for all channels to have content
@@ -152,13 +160,20 @@ void loop() {
         unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
 
-        bp_outL_i2s[i] = processed.output_to_transducer;
-        bp_outR_i2s[i] = processed.output_to_transducer;
+        bp_outL_i2s[i] = tone_gen.process();//processed.output_to_transducer;
+        bp_outR_i2s[i] = bp_outL_i2s[i];//processed.output_to_transducer;
         bp_outL_usb[i] = processed.input_feedback_removed;
         bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
+        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 10) == 0) //10x per second
+        // {
+        //     Serial.print("Force sense val:");
+        //     Serial.println();
+        // }
         //TODO: Get force sense reading and send over MIDI (print initially)
+
+        total_sample_count++;
     }
 
     // Play output buffers. Retry until success.
