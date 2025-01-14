@@ -10,6 +10,7 @@
             "includePath": [
                 "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/include",
                 "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/src",
+                "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                 "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/lib/teensy4_i2c-master/include",
                 "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/lib/teensy4_i2c-master/src",
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/Audio",
@@ -39,7 +40,6 @@
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/DS1307RTC",
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/DmxSimple",
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/DogLcd",
-                "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EasyTransfer/src",
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EasyTransferI2C/src",
                 "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/Encoder",
@@ -121,6 +121,7 @@
                 "path": [
                     "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/include",
                     "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/src",
+                    "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                     "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/lib/teensy4_i2c-master/include",
                     "/Users/mwd23/Documents/Programming/HapticInstrumentWorkshop/firmware/TeensyPlatformIO/lib/teensy4_i2c-master/src",
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/Audio",
@@ -150,7 +151,6 @@
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/DS1307RTC",
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/DmxSimple",
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/DogLcd",
-                    "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EEPROM",
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EasyTransfer/src",
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/EasyTransferI2C/src",
                     "/Users/mwd23/.platformio/packages/framework-arduinoteensy/libraries/Encoder",

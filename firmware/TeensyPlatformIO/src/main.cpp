@@ -12,6 +12,10 @@
 
 #define RESONANT_FREQ_HZ 89.0
 
+static const unsigned int VERSION_MAJ = 0;
+static const unsigned int VERSION_MIN = 1;
+const char VERSION_NOTES[] = "Debug for testing";
+
 //Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
 // GUItool: begin automatically generated code
 AudioInputI2SQuad        i2s_quad_in;      //xy=316,366
@@ -66,16 +70,18 @@ void setup() {
 
     // Enable the serial port for debugging
     Serial.begin(9600);
-    Serial.println("Started");
+    Serial.println("Teensy has booted.");
+    printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
+    printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
 
     max98389 max;
     max.begin(400 * 1000U);
     // Check that we can see the sensor and configure it.
     configured = max.configure();
     if (configured) {
-        Serial.println("Configured");
+        Serial.println("Amplifer chp successfully configured");
     } else {
-        Serial.println("Not configured");
+        Serial.println("Error! Amplifier chip not successfully configured.");
     }
     AudioMemory(512);
     sgtl5000_1.enable();
@@ -84,11 +90,11 @@ void setup() {
 
     TransducerFeedbackCancellation::Setup processing_setup;
     processing_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
-    processing_setup.resonance_peak_gain_db = -18.3;
+    processing_setup.resonance_peak_gain_db = 0.0;
     processing_setup.resonance_q = 10.0;
     processing_setup.resonance_tone_level_db = -100.0;
     processing_setup.inductance_filter_coefficient = 0.5;
-    processing_setup.transducer_input_wideband_gain_db = 0.0;
+    processing_setup.transducer_input_wideband_gain_db = 2.0;
     processing_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     transducer_processing.setup(processing_setup);
@@ -154,8 +160,8 @@ void loop() {
 
         bp_outL_i2s[i] = processed.output_to_transducer;
         bp_outR_i2s[i] = processed.output_to_transducer;
-        bp_outL_usb[i] = processed.input_feedback_removed;
-        bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
+        bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
+        bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
 
         //force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
 
