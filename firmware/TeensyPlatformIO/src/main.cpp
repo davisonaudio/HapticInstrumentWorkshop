@@ -33,6 +33,7 @@ AudioPlayQueue           queue_outL_i2s;         //xy=654,147
 AudioPlayQueue           queue_outR_usb;         //xy=660,410
 AudioPlayQueue           queue_outL_usb;         //xy=664,339
 AudioOutputI2S           i2s_out;           //xy=814,160
+// AudioOutputI2S2          i2s2_out;
 AudioOutputUSB           usb_out;           //xy=819,377
 AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
@@ -40,6 +41,8 @@ AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_out, 1);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_out, 0);
+// AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
+// AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
@@ -91,6 +94,8 @@ void setup() {
     // set up Teensy's built in LED
     pinMode(LED_BUILTIN, OUTPUT);
     led_blink_timer.begin(blinkLED, LED_BLINK_INTERVAL_NORMAL_OPERATION);  
+
+    pinMode(2, INPUT);
 
     // Enable the serial port for debugging
     Serial.begin(9600);
@@ -251,7 +256,7 @@ void printCurrentTime()
     int hours = time_s / 3600;
     int minutes = (time_s - (hours * 3600)) / 60;
     int seconds = time_s - (hours * 3600) - (minutes * 60);  
-    printf("%d:%d:%d",hours,minutes,seconds);
+    printf("%02d:%02d:%02d",hours,minutes,seconds);
 }
 
 void readAndApplyEepromParameters()
@@ -282,9 +287,13 @@ void processSerialInput(char new_char)
     serial_input_buffer[input_char_index++] = new_char;
     if (new_char == '\n')
     {
-        if (!strncmp(serial_input_buffer, "debug\n", strlen("debug\n")));
+        if (!strncmp(serial_input_buffer, "debug\n", strlen("debug\n")))
         {
             setErrorState(ErrorStates::DEBUG);
+        }
+        else if (!strncmp(serial_input_buffer, "normal\n", strlen("normal\n")))
+        {
+            setErrorState(ErrorStates::NORMAL_OPERATION);
         }
 
         input_char_index = 0;
