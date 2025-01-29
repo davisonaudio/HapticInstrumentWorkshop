@@ -2,6 +2,7 @@
 #include <i2c_device.h>
 #include "max98389.h"
 #include <Audio.h>
+#include <string.h>
 
 #include "au_Biquad.h"
 #include "au_config.h"
@@ -11,6 +12,13 @@
 #include "TeensyEeprom.h"
 
 #define RESONANT_FREQ_HZ 89.0
+
+#define MAX_SERIAL_INPUT_CHARS 256
+
+static const unsigned int VERSION_MAJ = 0;
+static const unsigned int VERSION_MIN = 1;
+const char VERSION_NOTES[] = "Debug for testing, lowpass disabled. L = V, R = I";
+
 
 //Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
 // GUItool: begin automatically generated code
@@ -34,39 +42,63 @@ AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_out, 1);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_out, 0);
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
-//AudioConnection          patchCord7(i2s_quad_in, 2, usb_out, 0);
-//AudioConnection          patchCord8(i2s_quad_in, 3, usb_out, 1);
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
 // GUItool: end automatically generated code
 
-IntervalTimer myTimer;
-int ledState = LOW;
+IntervalTimer led_blink_timer;
+int led_state = LOW;
 bool configured = false;
+
+char serial_input_buffer[MAX_SERIAL_INPUT_CHARS] = {0};
+int input_char_index = 0;
 
 TransducerFeedbackCancellation transducer_processing;
 ForceSensing force_sensing;
 Biquad meter_filter;
 TeensyEeprom teensy_eeprom;
 
+//Basic error states that can occur, used for debug prints and LED blink interval.
+enum class ErrorStates
+{
+    NORMAL_OPERATION,
+    AMP_NOT_CONFIGURED,
+    PLAY_BUFFER_ERROR,
+    DEBUG,
+    OTHER
+};
+
+ErrorStates current_error_state;
+
+static const unsigned long LED_BLINK_INTERVAL_NORMAL_OPERATION              =  1000000; //1s
+static const unsigned long LED_BLINK_INTERVAL_AMP_NOT_CONFIGURED            =   500000; //500ms
+static const unsigned long LED_BLINK_INTERVAL_PLAY_BUFFER_ERROR             =   250000; //250ms
+static const unsigned long LED_BLINK_INTERVAL_DEBUG                         =   100000; //100ms
+static const unsigned long LED_BLINK_INTERVAL_OTHER                         = 10000000; //10s
+
+
+void setErrorState(ErrorStates error_state);
+void printCurrentTime();
+void processSerialInput(char new_char);
+
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
 void blinkLED() {
-  if (ledState == LOW) {
-    ledState = HIGH;
-  } else {
-    ledState = LOW;
-  }
-  digitalWrite(LED_BUILTIN, ledState);
+    led_state = !led_state;
+    digitalWrite(LED_BUILTIN, led_state);
 }
 
 void setup() {
-    // blinkLED to run every 1 seconds
+    // set up Teensy's built in LED
     pinMode(LED_BUILTIN, OUTPUT);
-    myTimer.begin(blinkLED, 1000000);  
+    led_blink_timer.begin(blinkLED, LED_BLINK_INTERVAL_NORMAL_OPERATION);  
 
-    // Enable the USB serial port for debugging
+
+    // Enable the serial port for debugging
     Serial.begin(115200);
-    Serial.println("Started");
+    Serial.println("Teensy has booted.");
+    printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
+    printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
+    printf("Version notes: %s\r\n",VERSION_NOTES);
 
     //Configure amp IC over i2c
     max98389 max;
@@ -74,9 +106,9 @@ void setup() {
     // Check that we can see the sensor and configure it.
     configured = max.configure();
     if (configured) {
-        Serial.println("Configured");
+        Serial.println("Amplifer chip successfully configured");
     } else {
-        Serial.println("Not configured");
+        Serial.println("Error! Amplifier chip not successfully configured.");
     }
 
     AudioMemory(512);
@@ -93,6 +125,7 @@ void setup() {
     processing_setup.transducer_input_wideband_gain_db = 0.0;
     processing_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
+    processing_setup.lowpass_transducer_io = false;
     transducer_processing.setup(processing_setup);
 
     transducer_processing.setOscillatorFrequencyHz(500.0);
@@ -160,6 +193,12 @@ void loop() {
         unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
 
+
+//         bp_outL_i2s[i] = processed.output_to_transducer + 0.5 ;
+//         bp_outR_i2s[i] = processed.output_to_transducer + 0.5 ;
+//         bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
+//         bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
+
         bp_outL_i2s[i] = tone_gen.process();//processed.output_to_transducer;
         bp_outR_i2s[i] = bp_outL_i2s[i];//processed.output_to_transducer;
         bp_outL_usb[i] = processed.input_feedback_removed;
@@ -190,6 +229,60 @@ void loop() {
         Serial.println("Play usb right fail.");
     }
 
+    while (Serial.available()) {
+        char new_char = Serial.read();
+        // printf("%c", new_char);
+        processSerialInput(new_char);
+    }
+
+
+}
+
+void setErrorState(ErrorStates error_state)
+{
+    current_error_state = error_state;
+    printCurrentTime();
+    switch (error_state)
+    {
+    case ErrorStates::NORMAL_OPERATION:
+        printf("Entering normal operation.\r\n");
+        led_blink_timer.update(LED_BLINK_INTERVAL_NORMAL_OPERATION);
+        break;
+
+    case ErrorStates::AMP_NOT_CONFIGURED:
+        printf(" Error occurred while attempting to configure the MAX98389 chip via i2c. Check whether Teensy is connected to the board correctly.\r\n");
+        led_blink_timer.update(LED_BLINK_INTERVAL_AMP_NOT_CONFIGURED);
+        break;
+    
+    case ErrorStates::PLAY_BUFFER_ERROR:
+        printf(" Error occured while playing output buffer queue.\r\n");
+        led_blink_timer.update(LED_BLINK_INTERVAL_PLAY_BUFFER_ERROR);
+        break;
+
+    case ErrorStates::OTHER:
+        printf(" Other (generic) error occurred.\r\n");
+        led_blink_timer.update(LED_BLINK_INTERVAL_OTHER);
+        break;
+
+    case ErrorStates::DEBUG:
+        printf(" Entered debug mode.\r\n");
+        led_blink_timer.update(LED_BLINK_INTERVAL_DEBUG);
+        break;
+    
+    default:
+        printf(" Unknown error occurred.\r\n");
+        led_blink_timer.update(LED_BLINK_INTERVAL_OTHER);
+        break;
+    }
+}
+
+void printCurrentTime()
+{
+    int time_s = millis() / 1000;
+    int hours = time_s / 3600;
+    int minutes = (time_s - (hours * 3600)) / 60;
+    int seconds = time_s - (hours * 3600) - (minutes * 60);  
+    printf("%d:%d:%d",hours,minutes,seconds);
 }
 
 void readAndApplyEepromParameters()
@@ -206,4 +299,25 @@ void readAndApplyEepromParameters()
     TransducerFeedbackCancellation::Setup cancellation_setup;
     cancellation_setup.resonant_frequency_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ);
 
+}
+
+void processSerialInput(char new_char)
+{
+    if (input_char_index == (MAX_SERIAL_INPUT_CHARS - 1))
+    {
+        printf("Error! Max number of serial input characters (%d) per line exceeded. Input buffer reset.\r\n",MAX_SERIAL_INPUT_CHARS);
+        input_char_index = 0;
+        return;
+    }
+
+    serial_input_buffer[input_char_index++] = new_char;
+    if (new_char == '\n')
+    {
+        if (!strncmp(serial_input_buffer, "debug\n", strlen("debug\n")));
+        {
+            setErrorState(ErrorStates::DEBUG);
+        }
+
+        input_char_index = 0;
+    }
 }
