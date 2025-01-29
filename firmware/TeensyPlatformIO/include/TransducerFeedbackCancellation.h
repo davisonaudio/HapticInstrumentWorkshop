@@ -230,13 +230,14 @@ TransducerFeedbackCancellation::ProcessedSamples TransducerFeedbackCancellation:
         processed.input_feedback_removed = processed.transducer_return_with_gain_applied - processed.modelled_signal;
 
         //Process output to transducer
-        processed.output_to_transducer = unprocessed.output_to_transducer + m_resonance_tone.process();
+        processed.output_to_transducer = unprocessed.output_to_transducer;
 
         if (m_lowpass_filters_enabled)
         { //Filter to signal to/from transducer
             processed.output_to_transducer = m_output_to_transducer_lowpass.process(processed.output_to_transducer);
             processed.input_feedback_removed = m_input_from_transducer_lowpass.process(processed.input_feedback_removed);
         }
+        processed.output_to_transducer = processed.output_to_transducer + m_resonance_tone.process();
     }
 
     else if(amplifier_type == AmplifierType::VOLTAGE_DRIVE){

@@ -92,13 +92,15 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     led_blink_timer.begin(blinkLED, LED_BLINK_INTERVAL_NORMAL_OPERATION);  
 
+
     // Enable the serial port for debugging
-    Serial.begin(9600);
+    Serial.begin(115200);
     Serial.println("Teensy has booted.");
     printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
 
+    //Configure amp IC over i2c
     max98389 max;
     max.begin(400 * 1000U);
     // Check that we can see the sensor and configure it.
@@ -108,22 +110,30 @@ void setup() {
     } else {
         Serial.println("Error! Amplifier chip not successfully configured.");
     }
+
     AudioMemory(512);
     sgtl5000_1.enable();
     sgtl5000_1.volume(0.5);
 
-
+    //Setup feedback cancellation
     TransducerFeedbackCancellation::Setup processing_setup;
     processing_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
     processing_setup.resonance_peak_gain_db = -18.3;
     processing_setup.resonance_q = 10.0;
-    processing_setup.resonance_tone_level_db = -100.0;
+    processing_setup.resonance_tone_level_db = -10.0;
     processing_setup.inductance_filter_coefficient = 0.5;
     processing_setup.transducer_input_wideband_gain_db = 0.0;
     processing_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     processing_setup.lowpass_transducer_io = false;
     transducer_processing.setup(processing_setup);
+
+    transducer_processing.setOscillatorFrequencyHz(500.0);
+
+    //Setup force sensing
+    force_sensing.setup();
+    force_sensing.setRawDebugPrint(true); //Debug printing for calibration
+    force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
 
     queue_inL_usb.begin();
     queue_inR_usb.begin();
@@ -136,7 +146,12 @@ int16_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
 int16_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
 int16_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 
+unsigned long total_sample_count = 0;
+
 void loop() {
+
+    static ToneGenerator tone_gen(500.0, 44100, -10.0);
+
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
     // Wait for all channels to have content
@@ -167,21 +182,37 @@ void loop() {
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
 
-        //Apply volume level
+        //Apply volume level (simple linear scaling currently - could be improved)
         buf_inL_usb[i] *= volume_level;
         buf_inR_usb[i] *= volume_level;
 
         TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
+
         unprocessed.output_to_transducer = buf_inL_usb[i];
         unprocessed.input_from_transducer = buf_inR_i2s[i]; //Current measurement from amp
         unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
 
-        bp_outL_i2s[i] = processed.output_to_transducer + 0.5 ;
-        bp_outR_i2s[i] = processed.output_to_transducer + 0.5 ;
-        bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
-        bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
 
+//         bp_outL_i2s[i] = processed.output_to_transducer + 0.5 ;
+//         bp_outR_i2s[i] = processed.output_to_transducer + 0.5 ;
+//         bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
+//         bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
+
+        bp_outL_i2s[i] = tone_gen.process();//processed.output_to_transducer;
+        bp_outR_i2s[i] = bp_outL_i2s[i];//processed.output_to_transducer;
+        bp_outL_usb[i] = processed.input_feedback_removed;
+        bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
+
+        force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
+        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 10) == 0) //10x per second
+        // {
+        //     Serial.print("Force sense val:");
+        //     Serial.println();
+        // }
+        //TODO: Get force sense reading and send over MIDI (print initially)
+
+        total_sample_count++;
     }
 
     // Play output buffers. Retry until success.

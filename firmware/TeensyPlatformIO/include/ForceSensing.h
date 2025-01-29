@@ -23,6 +23,7 @@ public:
     void process(sample_t actuation_sample, sample_t sensed_sample);
 
     sample_t getDamping();
+    int getWindowSizeSamples();
 
     /* 
      * This function should be called when the transducer is damped. it stores the last raw val as the calibration value
@@ -37,6 +38,10 @@ public:
      * Also ensure that there is a tone at the resonant frequency, at the required signal level, before calibrating.
      */
     void calibrateUndamped();
+
+    void setRawDampedValue(float raw_damped);
+    void setRawUndampedValue(float raw_undamped);
+    void setRawDebugPrint(bool enable_print);
 
     virtual void endOfWindow(){}
 
@@ -65,12 +70,27 @@ private:
 
     sample_t m_last_raw_difference_val;
 
+    bool m_debug_raw_print_enabled = false;
+
 };
 
 
 /*
  * ForceSensing Implementation
  */
+void ForceSensing::setup()
+{
+    GoertzelAlgorithm::SetupParameters setup_parameters;
+    setup_parameters.sample_rate = AUDIO_SAMPLE_RATE_EXACT;
+    setup_parameters.target_frequency = 440.0;
+    setup_parameters.window_size_periods = 1;
+
+    m_actuation_signal_goertzel.setup(setup_parameters);
+    m_sensed_signal_goertzel.setup(setup_parameters);
+
+    reset();
+}
+
 void ForceSensing::setResonantFrequencyHz(sample_t resonant_freq_hz)
 {
     m_actuation_signal_goertzel.setTargetFrequencyHz(resonant_freq_hz);
@@ -95,6 +115,11 @@ void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
     if (m_actuation_signal_goertzel.checkNewValFlag())
     {
         m_last_raw_difference_val = m_actuation_signal_goertzel.getLastMagnitude() - m_sensed_signal_goertzel.getLastMagnitude();
+        if (m_debug_raw_print_enabled)
+        {
+            Serial.print("Force sense val:");
+            Serial.println(m_last_raw_difference_val);
+        }
     }
 }
 
@@ -138,4 +163,19 @@ void ForceSensing::reset()
 
     m_actuation_signal_window.setWindowSizeSamples(m_actuation_signal_goertzel.getWindowLengthSamples());
     m_sensing_signal_window.setWindowSizeSamples(m_sensed_signal_goertzel.getWindowLengthSamples());
+}
+
+void ForceSensing::setRawDampedValue(float raw_damped)
+{
+    m_damped_calibration_val = raw_damped;
+}
+
+void ForceSensing::setRawUndampedValue(float raw_undamped)
+{
+    m_undamped_calibration_val = raw_undamped;
+}
+
+void ForceSensing::setRawDebugPrint(bool enable_print)
+{
+    m_debug_raw_print_enabled = enable_print;
 }
