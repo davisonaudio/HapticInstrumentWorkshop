@@ -11,6 +11,12 @@
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
 
+#define WRITE_SERIAL_NUMBER_TO_EEPROM 0
+
+#if WRITE_SERIAL_NUMBER_TO_EEPROM
+#define TEENSY_SERIAL_NUMBER 11
+#endif
+
 #define RESONANT_FREQ_HZ 89.0
 
 #define MAX_SERIAL_INPUT_CHARS 256
@@ -33,7 +39,7 @@ AudioPlayQueue           queue_outL_i2s;         //xy=654,147
 AudioPlayQueue           queue_outR_usb;         //xy=660,410
 AudioPlayQueue           queue_outL_usb;         //xy=664,339
 AudioOutputI2S           i2s_out;           //xy=814,160
-// AudioOutputI2S2          i2s2_out;
+AudioOutputI2S2          i2s2_out;
 AudioOutputUSB           usb_out;           //xy=819,377
 AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
@@ -41,8 +47,8 @@ AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_out, 1);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_out, 0);
-// AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
-// AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
+AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
+AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
@@ -59,6 +65,7 @@ TransducerFeedbackCancellation transducer_processing;
 ForceSensing force_sensing;
 Biquad meter_filter;
 TeensyEeprom teensy_eeprom;
+uint8_t serial_number;
 
 //Basic error states that can occur, used for debug prints and LED blink interval.
 enum class ErrorStates
@@ -83,6 +90,8 @@ void setErrorState(ErrorStates error_state);
 void printCurrentTime();
 void processSerialInput(char new_char);
 
+void rxPitchChange(uint8_t channel, int pitch);
+
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
 void blinkLED() {
@@ -91,15 +100,22 @@ void blinkLED() {
 }
 
 void setup() {
+
+#if WRITE_SERIAL_NUMBER_TO_EEPROM
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::SERIAL_NUMBER, TEENSY_SERIAL_NUMBER);
+#endif
+
+    serial_number = teensy_eeprom.read(TeensyEeprom::ByteParameters::SERIAL_NUMBER);
+
     // set up Teensy's built in LED
     pinMode(LED_BUILTIN, OUTPUT);
     led_blink_timer.begin(blinkLED, LED_BLINK_INTERVAL_NORMAL_OPERATION);  
 
-    pinMode(2, INPUT);
+    // pinMode(2, INPUT);
 
     // Enable the serial port for debugging
     Serial.begin(115200);
-    Serial.println("Teensy has booted.");
+    printf("Teensy has booted. Serial number: %d\r\n",serial_number);
     printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
@@ -136,8 +152,10 @@ void setup() {
 
     //Setup force sensing
     force_sensing.setup();
-    force_sensing.setRawDebugPrint(true); //Debug printing for calibration
+    force_sensing.setRawDebugPrint(false); //Debug printing for calibration
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
+
+    usbMIDI.setHandlePitchChange(rxPitchChange);
 
     queue_inL_usb.begin();
     queue_inR_usb.begin();
@@ -203,8 +221,8 @@ void loop() {
 //         bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
 //         bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
 
-        bp_outL_i2s[i] = tone_gen.process();//processed.output_to_transducer;
-        bp_outR_i2s[i] = bp_outL_i2s[i];//processed.output_to_transducer;
+        bp_outL_i2s[i] = processed.output_to_transducer;//tone_gen.process();//processed.output_to_transducer;
+        bp_outR_i2s[i] = processed.output_to_transducer;//bp_outL_i2s[i];//processed.output_to_transducer;
         bp_outL_usb[i] = processed.input_feedback_removed;
         bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
 
@@ -233,11 +251,15 @@ void loop() {
         Serial.println("Play usb right fail.");
     }
 
+    //Process USB Serial input (debugging)
     while (Serial.available()) {
         char new_char = Serial.read();
         // printf("%c", new_char);
         processSerialInput(new_char);
     }
+
+    //Process USB MIDI input (configuring parameters)
+    usbMIDI.read();
 
 
 }
@@ -328,4 +350,9 @@ void processSerialInput(char new_char)
 
         input_char_index = 0;
     }
+}
+
+void rxPitchChange(uint8_t channel, int pitch)
+{
+
 }

@@ -41,7 +41,8 @@ class TeensyEeprom
 
         enum class ByteParameters
         {
-            GOERTZEL_WINDOW_LENGTH = 0
+            GOERTZEL_WINDOW_LENGTH = 0,
+            SERIAL_NUMBER
         };
 
         static const int NUM_EEPROM_BYTES = 1080; //Correct for Teensy 4.0
