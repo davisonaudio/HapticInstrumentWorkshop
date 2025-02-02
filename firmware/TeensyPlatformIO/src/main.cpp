@@ -3,6 +3,7 @@
 #include "max98389.h"
 #include <Audio.h>
 #include <string.h>
+#include <limits.h>
 
 #include "au_Biquad.h"
 #include "au_config.h"
@@ -38,17 +39,20 @@ AudioPlayQueue           queue_outR_i2s;         //xy=653,182
 AudioPlayQueue           queue_outL_i2s;         //xy=654,147
 AudioPlayQueue           queue_outR_usb;         //xy=660,410
 AudioPlayQueue           queue_outL_usb;         //xy=664,339
-AudioOutputI2S           i2s_out;           //xy=814,160
-AudioOutputI2S2          i2s2_out;
+// AudioOutputI2S           i2s_out;           //xy=814,160
+// AudioOutputI2S2          i2s2_out;
+
+AudioOutputI2SQuad      i2s_quad_out;
+
 AudioOutputUSB           usb_out;           //xy=819,377
 AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
 AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
-AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_out, 1);
-AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_out, 0);
-AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
-AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
+AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
+AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+// AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
+// AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
@@ -99,6 +103,20 @@ void blinkLED() {
     digitalWrite(LED_BUILTIN, led_state);
 }
 
+template <typename T>
+constexpr sample_t intToNormalised(T integer_value) {
+  return integer_value < 0
+    ? -static_cast<sample_t>(integer_value) / std::numeric_limits<T>::min()
+    :  static_cast<sample_t>(integer_value) / std::numeric_limits<T>::max();
+}
+
+template <typename T>
+constexpr sample_t normalisedToInt(T normalised_value) {
+  return normalised_value < 0
+    ? -static_cast<sample_t>(normalised_value) * std::numeric_limits<T>::min()
+    :  static_cast<sample_t>(normalised_value) * std::numeric_limits<T>::max();
+}
+
 void setup() {
 
 #if WRITE_SERIAL_NUMBER_TO_EEPROM
@@ -111,7 +129,7 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     led_blink_timer.begin(blinkLED, LED_BLINK_INTERVAL_NORMAL_OPERATION);  
 
-    // pinMode(2, INPUT);
+    pinMode(2, INPUT);
 
     // Enable the serial port for debugging
     Serial.begin(115200);
@@ -214,6 +232,7 @@ void loop() {
         unprocessed.input_from_transducer = buf_inR_i2s[i]; //Current measurement from amp
         unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
+
 
 
 //         bp_outL_i2s[i] = processed.output_to_transducer + 0.5 ;
@@ -356,3 +375,5 @@ void rxPitchChange(uint8_t channel, int pitch)
 {
 
 }
+
+
