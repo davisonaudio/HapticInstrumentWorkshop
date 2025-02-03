@@ -12,8 +12,11 @@
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
 
-#define WRITE_SERIAL_NUMBER_TO_EEPROM 0
+#define teensy_sample_t int16_t
 
+// Write the defined serial number byte to EEPROM when flashing if enabled
+// Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
+#define WRITE_SERIAL_NUMBER_TO_EEPROM 0
 #if WRITE_SERIAL_NUMBER_TO_EEPROM
 #define TEENSY_SERIAL_NUMBER 11
 #endif
@@ -27,39 +30,38 @@ static const unsigned int VERSION_MIN = 1;
 const char VERSION_NOTES[] = "Debug for testing, lowpass disabled. L = V, R = I";
 
 
-//Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
+// Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
 // GUItool: begin automatically generated code
-AudioInputI2SQuad        i2s_quad_in;      //xy=316,366
-AudioInputUSB            usb_in;           //xy=331,160
+AudioInputI2SQuad        i2s_quad_in;
+AudioInputUSB            usb_in;
+
+AudioOutputI2SQuad      i2s_quad_out;
+AudioOutputUSB           usb_out;
+
 AudioRecordQueue         queue_inR_usb;         //xy=487,179
 AudioRecordQueue         queue_inL_usb;         //xy=488,146
 AudioRecordQueue         queue_inL_i2s;         //xy=490,338
 AudioRecordQueue         queue_inR_i2s;         //xy=492,414
+
 AudioPlayQueue           queue_outR_i2s;         //xy=653,182
 AudioPlayQueue           queue_outL_i2s;         //xy=654,147
 AudioPlayQueue           queue_outR_usb;         //xy=660,410
 AudioPlayQueue           queue_outL_usb;         //xy=664,339
-// AudioOutputI2S           i2s_out;           //xy=814,160
-// AudioOutputI2S2          i2s2_out;
 
-AudioOutputI2SQuad      i2s_quad_out;
-
-AudioOutputUSB           usb_out;           //xy=819,377
 AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
 AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
-// AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
-// AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
+
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
 // GUItool: end automatically generated code
 
 IntervalTimer led_blink_timer;
-int led_state = LOW;
+
 bool configured = false;
 
 char serial_input_buffer[MAX_SERIAL_INPUT_CHARS] = {0};
@@ -93,29 +95,15 @@ static const unsigned long LED_BLINK_INTERVAL_OTHER                         = 10
 void setErrorState(ErrorStates error_state);
 void printCurrentTime();
 void processSerialInput(char new_char);
+void blinkLED();
 
 void rxPitchChange(uint8_t channel, int pitch);
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
-void blinkLED() {
-    led_state = !led_state;
-    digitalWrite(LED_BUILTIN, led_state);
-}
 
-template <typename T>
-constexpr sample_t intToNormalised(T integer_value) {
-  return integer_value < 0
-    ? -static_cast<sample_t>(integer_value) / std::numeric_limits<T>::min()
-    :  static_cast<sample_t>(integer_value) / std::numeric_limits<T>::max();
-}
 
-template <typename T>
-constexpr sample_t normalisedToInt(T normalised_value) {
-  return normalised_value < 0
-    ? -static_cast<sample_t>(normalised_value) * std::numeric_limits<T>::min()
-    :  static_cast<sample_t>(normalised_value) * std::numeric_limits<T>::max();
-}
+
 
 void setup() {
 
@@ -181,10 +169,10 @@ void setup() {
     queue_inR_i2s.begin();
 }
 
-int16_t buf_inL_usb[AUDIO_BLOCK_SAMPLES];
-int16_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
-int16_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
-int16_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inL_usb[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 
 unsigned long total_sample_count = 0;
 
@@ -222,28 +210,42 @@ void loop() {
 
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
 
+        //Convert all incoming samples from int16 to normalised float
+        sample_t usb_in_l = intToNormalised<teensy_sample_t>(buf_inL_usb[i]);
+        sample_t usb_in_r = intToNormalised<teensy_sample_t>(buf_inR_usb[i]);
+        sample_t amp_in_voltage = intToNormalised<teensy_sample_t>(buf_inL_i2s[i]);
+        sample_t amp_in_current = intToNormalised<teensy_sample_t>(buf_inR_i2s[i]);
+
         //Apply volume level (simple linear scaling currently - could be improved)
-        buf_inL_usb[i] *= volume_level;
-        buf_inR_usb[i] *= volume_level;
+        usb_in_l *= volume_level;
+        usb_in_r *= volume_level;
 
+        //Cancel actuation signal from sensed signal
         TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
-
-        unprocessed.output_to_transducer = buf_inL_usb[i];
-        unprocessed.input_from_transducer = buf_inR_i2s[i]; //Current measurement from amp
-        unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
+        unprocessed.output_to_transducer = usb_in_l;
+        unprocessed.input_from_transducer = amp_in_current; //Current measurement from amp
+        unprocessed.reference_input_loopback = amp_in_voltage; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
 
+        sample_t usb_out_l, usb_out_r, amp_out;
+        if (current_error_state == ErrorStates::DEBUG)
+        {
+            usb_out_l = amp_in_voltage;
+            usb_out_r = amp_in_current;
+            amp_out = usb_in_l;
+        }
+        else
+        {
+            usb_out_l = processed.input_feedback_removed;
+            usb_out_r = processed.input_feedback_removed;
+            amp_out = processed.output_to_transducer;
+        }
 
-
-//         bp_outL_i2s[i] = processed.output_to_transducer + 0.5 ;
-//         bp_outR_i2s[i] = processed.output_to_transducer + 0.5 ;
-//         bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
-//         bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
-
-        bp_outL_i2s[i] = processed.output_to_transducer;//tone_gen.process();//processed.output_to_transducer;
-        bp_outR_i2s[i] = processed.output_to_transducer;//bp_outL_i2s[i];//processed.output_to_transducer;
-        bp_outL_usb[i] = processed.input_feedback_removed;
-        bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
+        // Convert from normalised float back to int16 and add into output buffers
+        bp_outL_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out);
+        bp_outR_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out);
+        bp_outL_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_l);
+        bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
         // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 10) == 0) //10x per second
@@ -290,7 +292,7 @@ void setErrorState(ErrorStates error_state)
     switch (error_state)
     {
     case ErrorStates::NORMAL_OPERATION:
-        printf("Entering normal operation.\r\n");
+        printf(" Entering normal operation.\r\n");
         led_blink_timer.update(LED_BLINK_INTERVAL_NORMAL_OPERATION);
         break;
 
@@ -374,6 +376,12 @@ void processSerialInput(char new_char)
 void rxPitchChange(uint8_t channel, int pitch)
 {
 
+}
+
+void blinkLED() {
+    static bool led_state = false;
+    led_state = !led_state;
+    digitalWrite(LED_BUILTIN, led_state);
 }
 
 
