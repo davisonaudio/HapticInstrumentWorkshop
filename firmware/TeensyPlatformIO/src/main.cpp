@@ -11,14 +11,15 @@
 #include "TransducerFeedbackCancellation.h"
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
+#include "MidiComms.h"
 
 #define teensy_sample_t int16_t
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
-#define WRITE_SERIAL_NUMBER_TO_EEPROM 0
-#if WRITE_SERIAL_NUMBER_TO_EEPROM
-#define TEENSY_SERIAL_NUMBER 11
+#define INITIALISE_EEPROM_VALUES 0
+#if INITIALISE_EEPROM_VALUES
+#define TEENSY_SERIAL_NUMBER 0
 #endif
 
 #define RESONANT_FREQ_HZ 89.0
@@ -98,14 +99,18 @@ void setErrorState(ErrorStates error_state);
 void printCurrentTime();
 void processSerialInput(char new_char);
 void blinkLED();
+void readAndApplyEepromParameters();
+void writeEepromParameters();
 
 void rxPitchChange(uint8_t channel, int pitch);
+void rxProgrammeChange(uint8_t channel, uint8_t programme);
+void setResonantFrequency(sample_t resonant_frequency_hz);
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
 void setup() {
 
-#if WRITE_SERIAL_NUMBER_TO_EEPROM
+#if INITIALISE_EEPROM_VALUES
     teensy_eeprom.write(TeensyEeprom::ByteParameters::SERIAL_NUMBER, TEENSY_SERIAL_NUMBER);
 #endif
 
@@ -157,7 +162,16 @@ void setup() {
     force_sensing.setRawDebugPrint(false); //Debug printing for calibration
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
 
+#if INITIALISE_EEPROM_VALUES
+    writeEepromParameters();
+#endif
+    
+    readAndApplyEepromParameters();
+
+    printf("Resonant frequency: %f\r\n",current_cancellation_setup.resonant_frequency_hz);
+
     usbMIDI.setHandlePitchChange(rxPitchChange);
+    usbMIDI.setHandleProgramChange(rxProgrammeChange);
 
     //Begin audio buffer queues
     queue_inL_usb.begin();
@@ -173,8 +187,6 @@ teensy_sample_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 unsigned long total_sample_count = 0;
 
 void loop() {
-
-    static ToneGenerator tone_gen(500.0, 44100, -10.0);
 
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
@@ -344,6 +356,19 @@ void readAndApplyEepromParameters()
 
 }
 
+void writeEepromParameters()
+{
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ, current_cancellation_setup.resonant_frequency_hz);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_GAIN_DB, current_cancellation_setup.resonance_peak_gain_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_Q, current_cancellation_setup.resonance_q);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::TONE_LEVEL_DB, current_cancellation_setup.resonance_tone_level_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::INDUCTANCE_FILTER_COEFFICIENT, current_cancellation_setup.inductance_filter_coefficient);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB, current_cancellation_setup.transducer_input_wideband_gain_db);
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
+    printCurrentTime();
+    printf(" Parameters saved to EEPROM.\r\n");
+}
+
 
 
 void processSerialInput(char new_char)
@@ -373,7 +398,35 @@ void processSerialInput(char new_char)
 
 void rxPitchChange(uint8_t channel, int pitch)
 {
+    switch (static_cast<MidiComms::PitchBendChannels>(channel))
+    {
+        case MidiComms::PitchBendChannels::RESONANT_FREQUENCY:
+            setResonantFrequency(pitch);
+            break;
 
+        default:
+            printf("Undefined pitch bend channel used (%d)\r\n",channel);
+            break;
+    }
+}
+
+void rxProgrammeChange(uint8_t channel, uint8_t programme)
+{
+    switch (static_cast<MidiComms::ProgrammeChangeTypes>(programme))
+    {
+        case MidiComms::ProgrammeChangeTypes::SAVE_TO_EEPROM:
+            writeEepromParameters();
+            break;
+        case MidiComms::ProgrammeChangeTypes::CALIBRATE_DAMPED:
+            force_sensing.calibrateDamped();
+            break;
+        case MidiComms::ProgrammeChangeTypes::CALIBRATE_UNDAMPED:
+            force_sensing.calibrateUndamped();
+            break;
+        default:
+            printf("Unknown MIDI programme change (%d) received\r\n", programme);
+            break;
+    }
 }
 
 void blinkLED() {
@@ -382,9 +435,11 @@ void blinkLED() {
     digitalWrite(LED_BUILTIN, led_state);
 }
 
-void setResonantFrequency()
+void setResonantFrequency(sample_t resonant_frequency_hz)
 {
-
+    current_cancellation_setup.resonant_frequency_hz = resonant_frequency_hz;
+    force_sensing.setResonantFrequencyHz(resonant_frequency_hz);
+    transducer_processing.setResonantFrequencyHz(resonant_frequency_hz);
 }
 
 

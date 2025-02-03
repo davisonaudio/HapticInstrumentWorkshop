@@ -11,8 +11,26 @@ Date: 07/11/2024
 
 class MidiComms
 {
+public:
     enum class MessageTypes
     {
         INVALID = 0
+    };
+
+    enum class ProgrammeChangeTypes
+    {
+        SAVE_TO_EEPROM = 0,
+        CALIBRATE_DAMPED,
+        CALIBRATE_UNDAMPED
+    };
+
+    enum class ControlChangeTypes
+    {
+
+    };
+
+    enum class PitchBendChannels
+    {
+        RESONANT_FREQUENCY = 0
     };
 };

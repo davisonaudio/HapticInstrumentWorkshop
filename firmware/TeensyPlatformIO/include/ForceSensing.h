@@ -24,6 +24,7 @@ public:
 
     sample_t getDamping();
     int getWindowSizeSamples();
+    int getWindowSizePeriods();
 
     /* 
      * This function should be called when the transducer is damped. it stores the last raw val as the calibration value
@@ -128,14 +129,26 @@ sample_t ForceSensing::getDamping()
     return mapRawValue(m_last_raw_difference_val);
 }
 
+int ForceSensing::getWindowSizeSamples()
+{
+    return m_actuation_signal_goertzel.getWindowLengthSamples();
+}
+
+int ForceSensing::getWindowSizePeriods()
+{
+    return m_actuation_signal_goertzel.getWindowLengthPeriods();
+}
+
 void ForceSensing::calibrateUndamped()
 {
     m_undamped_calibration_val = m_last_raw_difference_val;
+    printf("New undamped calibration value: %f \r\n", m_undamped_calibration_val);
 }
 
 void ForceSensing::calibrateDamped()
 {
     m_damped_calibration_val = m_last_raw_difference_val;
+    printf("New damped calibration value: %f \r\n", m_damped_calibration_val);
 }
 
 sample_t ForceSensing::mapRawValue(sample_t raw_val)
