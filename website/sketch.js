@@ -17,6 +17,8 @@ let saveToEepromButton;
 let calibrateDampedButton;
 let calibrateUndampedButton;
 
+let resonantFrequencySlider
+
 let midiIn;
 let midiOut;
 let midiOutChannel;
@@ -83,6 +85,7 @@ function setup() {
   calibrateUndampedButton.position(500, 330);
   calibrateUndampedButton.mousePressed(calibrateUndamped);
   
+  resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
   
   WebMidi.enable(onMidiEnabled);
 }
@@ -175,4 +178,8 @@ function calibrateDamped() {
 
 function calibrateUndamped() {
   calibrateUndampedMidi(midiOutChannel);
+}
+
+function sendResonantFreq() {
+  
 }
