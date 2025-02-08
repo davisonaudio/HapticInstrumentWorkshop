@@ -16,6 +16,7 @@ let midiOutConnectBtn;
 let saveToEepromButton;
 let calibrateDampedButton;
 let calibrateUndampedButton;
+let resetToDefaultParametersButton;
 
 let resonantFrequencySlider
 
@@ -87,6 +88,10 @@ function setup() {
   calibrateUndampedButton = createButton("Calibrate Undamped Level");
   calibrateUndampedButton.position(x_pos_of_column, calibrateDampedButton.position().y + 30);
   calibrateUndampedButton.mousePressed(calibrateUndamped);
+
+  resetToDefaultParametersButton = createButton("Reset to Defaults");
+  resetToDefaultParametersButton.position(x_pos_of_column, calibrateUndampedButton.position().y + 30);
+  resetToDefaultParametersButton.mousePressed(resetParameters);
   
   resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
   
@@ -181,6 +186,10 @@ function calibrateDamped() {
 
 function calibrateUndamped() {
   calibrateUndampedMidi(midiOutChannel);
+}
+
+function resetParameters() {
+  resetParametersMidi(midiOutChannel);
 }
 
 function sendResonantFreq() {

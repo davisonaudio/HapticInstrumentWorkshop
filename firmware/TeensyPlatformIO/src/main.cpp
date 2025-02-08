@@ -103,6 +103,7 @@ void processSerialInput(char new_char);
 void blinkLED();
 void readAndApplyEepromParameters();
 void writeEepromParameters();
+void resetToDefaultParameters();
 
 void rxPitchChange(uint8_t channel, int pitch);
 void rxProgrammeChange(uint8_t channel, uint8_t programme);
@@ -145,31 +146,16 @@ void setup() {
     sgtl5000_1.enable();
     sgtl5000_1.volume(0.5);
 
-    //Setup feedback cancellation
-    current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
-    current_cancellation_setup.resonance_peak_gain_db = -18.3;
-    current_cancellation_setup.resonance_q = 10.0;
-    current_cancellation_setup.resonance_tone_level_db = -50.0;
-    current_cancellation_setup.inductance_filter_coefficient = 0.5;
-    current_cancellation_setup.transducer_input_wideband_gain_db = 0.0;
-    current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
-    current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
-    current_cancellation_setup.lowpass_transducer_io = false;
-    transducer_processing.setup(current_cancellation_setup);
-
-    transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
-
-    //Setup force sensing
     force_sensing.setup();
-    force_sensing.setRawDebugPrint(true); //Debug printing for calibration
-    force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
-    force_sensing.setWindowSizePeriods(20);
+
+    //Setup feedback cancellation
+    resetToDefaultParameters();
 
 #if INITIALISE_EEPROM_VALUES
     writeEepromParameters();
 #endif
     
-    // readAndApplyEepromParameters();
+    //readAndApplyEepromParameters();
 
     printf("Resonant frequency: %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 
@@ -193,14 +179,12 @@ void loop() {
 
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
-    // Wait for all channels to have content
-    // while (!queue_inL_usb.available() || !queue_inR_usb.available() || !queue_inL_i2s.available() || !queue_inR_i2s.available());
-
+    // Wait for i2s (amp) channels to have content
     while (!queue_inL_i2s.available() || !queue_inR_i2s.available());
 
     //Copy queue input buffers
     if (queue_inL_usb.available() && queue_inR_usb.available())
-    {
+    { //This doesn't block on waiting for USB buffers because new buffers will not always be sent if there is no audio output. This would then block the whole programme indefinitely.
         memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
         memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
         queue_inL_usb.freeBuffer();
@@ -211,7 +195,6 @@ void loop() {
     memcpy(buf_inR_i2s, queue_inR_i2s.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
     
     //Free queue input buffers
-
     queue_inL_i2s.freeBuffer();
     queue_inR_i2s.freeBuffer();
 
@@ -361,6 +344,8 @@ void readAndApplyEepromParameters()
     force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
     force_sensing.setWindowSizePeriods(teensy_eeprom.read(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH));
 
+    printf("Read parameters from flash. Resonant frequency now: %f\r\n", current_cancellation_setup.resonant_frequency_hz);
+
 }
 
 void writeEepromParameters()
@@ -424,6 +409,9 @@ void rxProgrammeChange(uint8_t channel, uint8_t programme)
         case MidiComms::ProgrammeChangeTypes::SAVE_TO_EEPROM:
             writeEepromParameters();
             break;
+        case MidiComms::ProgrammeChangeTypes::RESET_TO_DEFAULT_PARAMETERS:
+            resetToDefaultParameters();
+            break;
         case MidiComms::ProgrammeChangeTypes::CALIBRATE_DAMPED:
             force_sensing.calibrateDamped();
             break;
@@ -449,4 +437,22 @@ void setResonantFrequency(sample_t resonant_frequency_hz)
     transducer_processing.setResonantFrequencyHz(resonant_frequency_hz);
 }
 
+void resetToDefaultParameters()
+{
+    current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
+    current_cancellation_setup.resonance_peak_gain_db = -18.3;
+    current_cancellation_setup.resonance_q = 10.0;
+    current_cancellation_setup.resonance_tone_level_db = -50.0;
+    current_cancellation_setup.inductance_filter_coefficient = 0.5;
+    current_cancellation_setup.transducer_input_wideband_gain_db = 0.0;
+    current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
+    current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
+    current_cancellation_setup.lowpass_transducer_io = false;
+    transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
+    transducer_processing.setup(current_cancellation_setup);
 
+    force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
+    force_sensing.setWindowSizePeriods(20);
+
+    printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
+}

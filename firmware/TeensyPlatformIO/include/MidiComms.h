@@ -20,6 +20,7 @@ public:
     enum class ProgrammeChangeTypes
     {
         SAVE_TO_EEPROM = 0,
+        RESET_TO_DEFAULT_PARAMETERS,
         CALIBRATE_DAMPED,
         CALIBRATE_UNDAMPED
     };
