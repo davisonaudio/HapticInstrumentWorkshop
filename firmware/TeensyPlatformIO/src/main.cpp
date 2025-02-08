@@ -17,10 +17,12 @@
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
-#define INITIALISE_EEPROM_VALUES 0
-#if INITIALISE_EEPROM_VALUES
+#define WRITE_SERIAL_NUMBER_TO_FLASH 0
+#if WRITE_SERIAL_NUMBER_TO_FLASH
 #define TEENSY_SERIAL_NUMBER 0
 #endif
+
+#define INITIALISE_EEPROM_VALUES 0
 
 #define RESONANT_FREQ_HZ 89.0
 
@@ -110,7 +112,7 @@ void setResonantFrequency(sample_t resonant_frequency_hz);
 
 void setup() {
 
-#if INITIALISE_EEPROM_VALUES
+#if WRITE_SERIAL_NUMBER_TO_FLASH
     teensy_eeprom.write(TeensyEeprom::ByteParameters::SERIAL_NUMBER, TEENSY_SERIAL_NUMBER);
 #endif
 
@@ -147,7 +149,7 @@ void setup() {
     current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
     current_cancellation_setup.resonance_peak_gain_db = -18.3;
     current_cancellation_setup.resonance_q = 10.0;
-    current_cancellation_setup.resonance_tone_level_db = -10.0;
+    current_cancellation_setup.resonance_tone_level_db = -50.0;
     current_cancellation_setup.inductance_filter_coefficient = 0.5;
     current_cancellation_setup.transducer_input_wideband_gain_db = 0.0;
     current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
@@ -159,8 +161,9 @@ void setup() {
 
     //Setup force sensing
     force_sensing.setup();
-    force_sensing.setRawDebugPrint(false); //Debug printing for calibration
+    force_sensing.setRawDebugPrint(true); //Debug printing for calibration
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
+    force_sensing.setWindowSizePeriods(20);
 
 #if INITIALISE_EEPROM_VALUES
     writeEepromParameters();
@@ -191,19 +194,24 @@ void loop() {
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
     // Wait for all channels to have content
-    while (!queue_inL_usb.available() || !queue_inR_usb.available()
-        || !queue_inL_i2s.available() || !queue_inR_i2s.available());
+    // while (!queue_inL_usb.available() || !queue_inR_usb.available() || !queue_inL_i2s.available() || !queue_inR_i2s.available());
 
+    while (!queue_inL_i2s.available() || !queue_inR_i2s.available());
 
     //Copy queue input buffers
-    memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
-    memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
+    if (queue_inL_usb.available() && queue_inR_usb.available())
+    {
+        memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
+        memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
+        queue_inL_usb.freeBuffer();
+        queue_inR_usb.freeBuffer();
+    }
+
     memcpy(buf_inL_i2s, queue_inL_i2s.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
     memcpy(buf_inR_i2s, queue_inR_i2s.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
     
     //Free queue input buffers
-    queue_inL_usb.freeBuffer();
-    queue_inR_usb.freeBuffer();
+
     queue_inL_i2s.freeBuffer();
     queue_inR_i2s.freeBuffer();
 
@@ -257,10 +265,9 @@ void loop() {
         bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
-        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 10) == 0) //10x per second
+        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 1) == 0) //10x per second
         // {
-        //     Serial.print("Force sense val:");
-        //     Serial.println();
+        //     printf("Force sense val: %f\r\n", force_sensing.);
         // }
         //TODO: Get force sense reading and send over MIDI (print initially)
 

@@ -118,8 +118,7 @@ void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
         m_last_raw_difference_val = m_actuation_signal_goertzel.getLastMagnitude() - m_sensed_signal_goertzel.getLastMagnitude();
         if (m_debug_raw_print_enabled)
         {
-            Serial.print("Force sense val:");
-            Serial.println(m_last_raw_difference_val);
+            printf("Raw force sense vals: actuation: %f, sense: %f \r\n",m_actuation_signal_goertzel.getLastMagnitude(), m_sensed_signal_goertzel.getLastMagnitude());
         }
     }
 }
