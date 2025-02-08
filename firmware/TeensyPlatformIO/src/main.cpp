@@ -166,7 +166,7 @@ void setup() {
     writeEepromParameters();
 #endif
     
-    readAndApplyEepromParameters();
+    // readAndApplyEepromParameters();
 
     printf("Resonant frequency: %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 

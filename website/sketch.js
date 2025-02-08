@@ -25,6 +25,8 @@ let midiOutChannel;
 
 let debug_mode = false;
 
+
+
 function setup() {
   createCanvas(700, 500);
   background(220);
@@ -41,48 +43,49 @@ function setup() {
     port.open(usedPorts[0], 115200);
   }
 
-  text("Serial Controls", 500, 20);
+  let x_pos_of_column = 500;
+  let serialText = text("Serial Controls", x_pos_of_column, 20);
   connectBtn = createButton('Connect Serial');
-  connectBtn.position(500, 30);
+  connectBtn.position(x_pos_of_column, 30);
   connectBtn.mousePressed(connectBtnClick);
 
   sendDebugBtn = createButton('Enter Debug Mode');
-  sendDebugBtn.position(500, 60);
+  sendDebugBtn.position(x_pos_of_column, connectBtn.position().y + 30);
   sendDebugBtn.mousePressed(sendDebugBtnClick);
   
   downloadLoggingBtn = createButton('Download Logging txt');
-  downloadLoggingBtn.position(500, 90);
+  downloadLoggingBtn.position(x_pos_of_column, sendDebugBtn.position().y + 30);
   downloadLoggingBtn.mousePressed(downloadLogging);
   
   
   
-  text("MIDI Controls", 500, 140);
+  text("MIDI Controls", x_pos_of_column, downloadLoggingBtn.position().y + 30 + 20);
   midiInPortDropdown = createSelect();
-  midiInPortDropdown.position(500, 150);
+  midiInPortDropdown.position(x_pos_of_column, downloadLoggingBtn.position().y + 60);
   midiInPortDropdown.option("None");
   
   midiInConnectBtn = createButton("Connect MIDI In");
-  midiInConnectBtn.position(500, 180);
+  midiInConnectBtn.position(x_pos_of_column, midiInPortDropdown.position().y + 25);
   midiInConnectBtn.mousePressed(connectMidiIn);
   
   midiOutPortDropdown = createSelect();
-  midiOutPortDropdown.position(500, 210);
+  midiOutPortDropdown.position(x_pos_of_column, midiInConnectBtn.position().y + 35);
   midiOutPortDropdown.option("None");
   
   midiInConnectBtn = createButton("Connect MIDI Out");
-  midiInConnectBtn.position(500, 240);
+  midiInConnectBtn.position(x_pos_of_column, midiOutPortDropdown.position().y + 25);
   midiInConnectBtn.mousePressed(connectMidiOut);
   
   saveToEepromButton = createButton("Save Parameters to EEPROM");
-  saveToEepromButton.position(500, 270);
+  saveToEepromButton.position(x_pos_of_column, midiInConnectBtn.position().y + 30);
   saveToEepromButton.mousePressed(saveToEeprom);
   
   calibrateDampedButton = createButton("Calibrate Damped Level");
-  calibrateDampedButton.position(500, 300);
+  calibrateDampedButton.position(x_pos_of_column, saveToEepromButton.position().y + 30);
   calibrateDampedButton.mousePressed(calibrateDamped);
   
   calibrateUndampedButton = createButton("Calibrate Undamped Level");
-  calibrateUndampedButton.position(500, 330);
+  calibrateUndampedButton.position(x_pos_of_column, calibrateDampedButton.position().y + 30);
   calibrateUndampedButton.mousePressed(calibrateUndamped);
   
   resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
