@@ -3,6 +3,7 @@
 #include "max98389.h"
 #include <Audio.h>
 #include <string.h>
+#include <limits.h>
 
 #include "au_Biquad.h"
 #include "au_config.h"
@@ -10,58 +11,68 @@
 #include "TransducerFeedbackCancellation.h"
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
+#include "MidiComms.h"
 
-#define WRITE_SERIAL_NUMBER_TO_EEPROM 0
+#define teensy_sample_t int16_t
 
-#if WRITE_SERIAL_NUMBER_TO_EEPROM
-#define TEENSY_SERIAL_NUMBER 11
+// Write the defined serial number byte to EEPROM when flashing if enabled
+// Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
+#define WRITE_SERIAL_NUMBER_TO_FLASH 0
+#if WRITE_SERIAL_NUMBER_TO_FLASH
+#define TEENSY_SERIAL_NUMBER 0
 #endif
+
+#define INITIALISE_EEPROM_VALUES 0
 
 #define RESONANT_FREQ_HZ 89.0
 
 #define MAX_SERIAL_INPUT_CHARS 256
 
-static const unsigned int VERSION_MAJ = 0;
-static const unsigned int VERSION_MIN = 1;
-const char VERSION_NOTES[] = "Debug for testing, lowpass disabled. L = V, R = I";
+static const unsigned int VERSION_MAJ = 1;
+static const unsigned int VERSION_MIN = 0;
+const char VERSION_NOTES[] = "Initial release version. Still further implementation for MIDI control required but basic force sensing works.";
 
 
-//Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
+// Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
 // GUItool: begin automatically generated code
-AudioInputI2SQuad        i2s_quad_in;      //xy=316,366
-AudioInputUSB            usb_in;           //xy=331,160
+AudioInputI2SQuad        i2s_quad_in;
+AudioInputUSB            usb_in;
+
+AudioOutputI2SQuad      i2s_quad_out;
+AudioOutputUSB           usb_out;
+
 AudioRecordQueue         queue_inR_usb;         //xy=487,179
 AudioRecordQueue         queue_inL_usb;         //xy=488,146
 AudioRecordQueue         queue_inL_i2s;         //xy=490,338
 AudioRecordQueue         queue_inR_i2s;         //xy=492,414
+
 AudioPlayQueue           queue_outR_i2s;         //xy=653,182
 AudioPlayQueue           queue_outL_i2s;         //xy=654,147
 AudioPlayQueue           queue_outR_usb;         //xy=660,410
 AudioPlayQueue           queue_outL_usb;         //xy=664,339
-AudioOutputI2S           i2s_out;           //xy=814,160
-AudioOutputI2S2          i2s2_out;
-AudioOutputUSB           usb_out;           //xy=819,377
+
 AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
 AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
-AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_out, 1);
-AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_out, 0);
-AudioConnection          patchCord9(queue_outR_i2s, 0, i2s2_out, 1);
-AudioConnection          patchCord10(queue_outL_i2s, 0, i2s2_out, 0);
+AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
+AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
+
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
 // GUItool: end automatically generated code
 
 IntervalTimer led_blink_timer;
-int led_state = LOW;
+
 bool configured = false;
 
 char serial_input_buffer[MAX_SERIAL_INPUT_CHARS] = {0};
 int input_char_index = 0;
 
 TransducerFeedbackCancellation transducer_processing;
+TransducerFeedbackCancellation::Setup current_cancellation_setup;
+
 ForceSensing force_sensing;
 Biquad meter_filter;
 TeensyEeprom teensy_eeprom;
@@ -89,19 +100,22 @@ static const unsigned long LED_BLINK_INTERVAL_OTHER                         = 10
 void setErrorState(ErrorStates error_state);
 void printCurrentTime();
 void processSerialInput(char new_char);
+void blinkLED();
+void readAndApplyEepromParameters();
+void writeEepromParameters();
+void resetToDefaultParameters();
+void sendSerialDetails();
 
 void rxPitchChange(uint8_t channel, int pitch);
+void rxProgrammeChange(uint8_t channel, uint8_t programme);
+void setResonantFrequency(sample_t resonant_frequency_hz);
+void txForceSenseVal(sample_t force_sense_val);
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
-void blinkLED() {
-    led_state = !led_state;
-    digitalWrite(LED_BUILTIN, led_state);
-}
-
 void setup() {
 
-#if WRITE_SERIAL_NUMBER_TO_EEPROM
+#if WRITE_SERIAL_NUMBER_TO_FLASH
     teensy_eeprom.write(TeensyEeprom::ByteParameters::SERIAL_NUMBER, TEENSY_SERIAL_NUMBER);
 #endif
 
@@ -111,14 +125,11 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     led_blink_timer.begin(blinkLED, LED_BLINK_INTERVAL_NORMAL_OPERATION);  
 
-    // pinMode(2, INPUT);
+    //Setup pin 2 to input due to hardware mod (pin 32 is i2s output and connected to pin 2). DO NOT USE PIN 2 AS AN OUTPUT!!
+    pinMode(2, INPUT);
 
-    // Enable the serial port for debugging
-    Serial.begin(115200);
-    printf("Teensy has booted. Serial number: %d\r\n",serial_number);
-    printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
-    printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
-    printf("Version notes: %s\r\n",VERSION_NOTES);
+    printf("Teensy has booted.\r\n");
+    sendSerialDetails();
 
     //Configure amp IC over i2c
     max98389 max;
@@ -135,61 +146,55 @@ void setup() {
     sgtl5000_1.enable();
     sgtl5000_1.volume(0.5);
 
-    //Setup feedback cancellation
-    TransducerFeedbackCancellation::Setup processing_setup;
-    processing_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
-    processing_setup.resonance_peak_gain_db = -18.3;
-    processing_setup.resonance_q = 10.0;
-    processing_setup.resonance_tone_level_db = -10.0;
-    processing_setup.inductance_filter_coefficient = 0.5;
-    processing_setup.transducer_input_wideband_gain_db = 0.0;
-    processing_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
-    processing_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
-    processing_setup.lowpass_transducer_io = false;
-    transducer_processing.setup(processing_setup);
-
-    transducer_processing.setOscillatorFrequencyHz(500.0);
-
-    //Setup force sensing
     force_sensing.setup();
-    force_sensing.setRawDebugPrint(false); //Debug printing for calibration
-    force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
+
+    //Setup feedback cancellation
+    resetToDefaultParameters();
+
+#if INITIALISE_EEPROM_VALUES
+    writeEepromParameters();
+#endif
+    
+    readAndApplyEepromParameters();
+
+    printf("Resonant frequency: %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 
     usbMIDI.setHandlePitchChange(rxPitchChange);
+    usbMIDI.setHandleProgramChange(rxProgrammeChange);
 
+    //Begin audio buffer queues
     queue_inL_usb.begin();
     queue_inR_usb.begin();
     queue_inL_i2s.begin();
     queue_inR_i2s.begin();
 }
 
-int16_t buf_inL_usb[AUDIO_BLOCK_SAMPLES];
-int16_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
-int16_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
-int16_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
-
+teensy_sample_t buf_inL_usb[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
+teensy_sample_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 unsigned long total_sample_count = 0;
 
 void loop() {
 
-    static ToneGenerator tone_gen(500.0, 44100, -10.0);
-
     int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
 
-    // Wait for all channels to have content
-    while (!queue_inL_usb.available() || !queue_inR_usb.available()
-        || !queue_inL_i2s.available() || !queue_inR_i2s.available());
-
+    // Wait for i2s (amp) channels to have content
+    while (!queue_inL_i2s.available() || !queue_inR_i2s.available());
 
     //Copy queue input buffers
-    memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(short)*AUDIO_BLOCK_SAMPLES);
-    memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(short)*AUDIO_BLOCK_SAMPLES);
-    memcpy(buf_inL_i2s, queue_inL_i2s.readBuffer(), sizeof(short)*AUDIO_BLOCK_SAMPLES);
-    memcpy(buf_inR_i2s, queue_inR_i2s.readBuffer(), sizeof(short)*AUDIO_BLOCK_SAMPLES);
+    if (queue_inL_usb.available() && queue_inR_usb.available())
+    { //This doesn't block on waiting for USB buffers because new buffers will not always be sent if there is no audio output. This would then block the whole programme indefinitely.
+        memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
+        memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
+        queue_inL_usb.freeBuffer();
+        queue_inR_usb.freeBuffer();
+    }
+
+    memcpy(buf_inL_i2s, queue_inL_i2s.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
+    memcpy(buf_inR_i2s, queue_inR_i2s.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
     
     //Free queue input buffers
-    queue_inL_usb.freeBuffer();
-    queue_inR_usb.freeBuffer();
     queue_inL_i2s.freeBuffer();
     queue_inR_i2s.freeBuffer();
 
@@ -202,35 +207,54 @@ void loop() {
     //Get User's volume setting
     float volume_level = usb_in.volume(); //0.0 - 1.0
 
+    //Loop through each sample in the buffers
     for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
 
+        //Convert all incoming samples from int16 to normalised float
+        sample_t usb_in_l = intToNormalised<teensy_sample_t>(buf_inL_usb[i]);
+        sample_t usb_in_r = intToNormalised<teensy_sample_t>(buf_inR_usb[i]);
+        sample_t amp_in_voltage = intToNormalised<teensy_sample_t>(buf_inL_i2s[i]);
+        sample_t amp_in_current = intToNormalised<teensy_sample_t>(buf_inR_i2s[i]);
+
         //Apply volume level (simple linear scaling currently - could be improved)
-        buf_inL_usb[i] *= volume_level;
-        buf_inR_usb[i] *= volume_level;
+        usb_in_l *= volume_level;
+        usb_in_r *= volume_level;
 
+        //Cancel actuation signal from sensed signal
         TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
-
-        unprocessed.output_to_transducer = buf_inL_usb[i];
-        unprocessed.input_from_transducer = buf_inR_i2s[i]; //Current measurement from amp
-        unprocessed.reference_input_loopback = buf_inL_i2s[i]; //Voltage measurement from amp
+        unprocessed.output_to_transducer = usb_in_l;
+        unprocessed.input_from_transducer = amp_in_current; //Current measurement from amp
+        unprocessed.reference_input_loopback = amp_in_voltage; //Voltage measurement from amp
         TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
 
+        sample_t usb_out_l, usb_out_r, amp_out;
+        if (current_error_state == ErrorStates::DEBUG)
+        {
+            usb_out_l = amp_in_voltage;
+            usb_out_r = amp_in_current;
+            amp_out = usb_in_l;
+        }
+        else
+        {
+            usb_out_l = processed.input_feedback_removed;
+            usb_out_r = processed.input_feedback_removed;
+            amp_out = processed.output_to_transducer;
+        }
 
-//         bp_outL_i2s[i] = processed.output_to_transducer + 0.5 ;
-//         bp_outR_i2s[i] = processed.output_to_transducer + 0.5 ;
-//         bp_outL_usb[i] = buf_inL_i2s[i];//processed.input_feedback_removed;
-//         bp_outR_usb[i] = buf_inR_i2s[i];// - buf_inL_i2s[i];
-
-        bp_outL_i2s[i] = processed.output_to_transducer;//tone_gen.process();//processed.output_to_transducer;
-        bp_outR_i2s[i] = processed.output_to_transducer;//bp_outL_i2s[i];//processed.output_to_transducer;
-        bp_outL_usb[i] = processed.input_feedback_removed;
-        bp_outR_usb[i] = buf_inR_i2s[i] - buf_inL_i2s[i];
+        // Convert from normalised float back to int16 and add into output buffers
+        bp_outL_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out);
+        bp_outR_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out);
+        bp_outL_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_l);
+        bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
-        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 10) == 0) //10x per second
+        if (force_sensing.valueAvailable())
+        {
+            txForceSenseVal(force_sensing.getDamping());
+        }
+        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 1) == 0) //10x per second
         // {
-        //     Serial.print("Force sense val:");
-        //     Serial.println();
+        //     printf("Force sense val: %f\r\n", force_sensing.);
         // }
         //TODO: Get force sense reading and send over MIDI (print initially)
 
@@ -254,14 +278,11 @@ void loop() {
     //Process USB Serial input (debugging)
     while (Serial.available()) {
         char new_char = Serial.read();
-        // printf("%c", new_char);
         processSerialInput(new_char);
     }
 
     //Process USB MIDI input (configuring parameters)
     usbMIDI.read();
-
-
 }
 
 void setErrorState(ErrorStates error_state)
@@ -271,8 +292,9 @@ void setErrorState(ErrorStates error_state)
     switch (error_state)
     {
     case ErrorStates::NORMAL_OPERATION:
-        printf("Entering normal operation.\r\n");
+        printf(" Entering normal operation.\r\n");
         led_blink_timer.update(LED_BLINK_INTERVAL_NORMAL_OPERATION);
+        sendSerialDetails();
         break;
 
     case ErrorStates::AMP_NOT_CONFIGURED:
@@ -308,24 +330,43 @@ void printCurrentTime()
     int hours = time_s / 3600;
     int minutes = (time_s - (hours * 3600)) / 60;
     int seconds = time_s - (hours * 3600) - (minutes * 60);  
-    printf("%02d:%02d:%02d",hours,minutes,seconds);
+    printf("%02d:%02d:%02d", hours, minutes, seconds);
 }
 
 void readAndApplyEepromParameters()
 {
-        // sample_t resonant_frequency_hz;
-        // sample_t resonance_peak_gain_db;
-        // sample_t resonance_q;
-        // sample_t resonance_tone_level_db;
-        // sample_t inductance_filter_coefficient;
-        // sample_t transducer_input_wideband_gain_db;
-        // sample_t sample_rate_hz;
-        // AmplifierType amplifier_type;
-        // bool lowpass_transducer_io = true;
-    TransducerFeedbackCancellation::Setup cancellation_setup;
-    cancellation_setup.resonant_frequency_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ);
+    current_cancellation_setup.resonant_frequency_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ);
+    current_cancellation_setup.resonance_peak_gain_db = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_GAIN_DB);
+    current_cancellation_setup.resonance_q = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_Q);
+    current_cancellation_setup.resonance_tone_level_db =  teensy_eeprom.read(TeensyEeprom::FloatParameters::TONE_LEVEL_DB);
+    current_cancellation_setup.inductance_filter_coefficient =  teensy_eeprom.read(TeensyEeprom::FloatParameters::INDUCTANCE_FILTER_COEFFICIENT);
+    current_cancellation_setup.transducer_input_wideband_gain_db =  teensy_eeprom.read(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB);
+    current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
+    current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
+    current_cancellation_setup.lowpass_transducer_io = false;
+    transducer_processing.setup(current_cancellation_setup);
+
+    force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
+    force_sensing.setWindowSizePeriods(teensy_eeprom.read(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH));
+
+    printf("Read parameters from flash. Resonant frequency now: %f\r\n", current_cancellation_setup.resonant_frequency_hz);
 
 }
+
+void writeEepromParameters()
+{
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ, current_cancellation_setup.resonant_frequency_hz);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_GAIN_DB, current_cancellation_setup.resonance_peak_gain_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_Q, current_cancellation_setup.resonance_q);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::TONE_LEVEL_DB, current_cancellation_setup.resonance_tone_level_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::INDUCTANCE_FILTER_COEFFICIENT, current_cancellation_setup.inductance_filter_coefficient);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB, current_cancellation_setup.transducer_input_wideband_gain_db);
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
+    printCurrentTime();
+    printf(" Parameters saved to EEPROM.\r\n");
+}
+
+
 
 void processSerialInput(char new_char)
 {
@@ -354,5 +395,90 @@ void processSerialInput(char new_char)
 
 void rxPitchChange(uint8_t channel, int pitch)
 {
+    //Library parses MIDI channels as 1-16. Subtract 1 to make it 0-15.
+    channel--;
 
+    // printf("Pitch bend: %f on channel %d\r\n",MidiComms::pitchBendToNormalised(pitch), channel);
+    switch (static_cast<MidiComms::PitchBendChannels>(channel))
+    {
+        case MidiComms::PitchBendChannels::RESONANT_FREQUENCY:
+            setResonantFrequency(pitch - MidiComms::MIN_PITCH_BEND_VALUE);
+            break;
+
+        default:
+            printf("Undefined pitch bend channel used (%d)\r\n",channel);
+            break;
+    }
+}
+
+void rxProgrammeChange(uint8_t channel, uint8_t programme)
+{
+    switch (static_cast<MidiComms::ProgrammeChangeTypes>(programme))
+    {
+        case MidiComms::ProgrammeChangeTypes::SAVE_TO_EEPROM:
+            writeEepromParameters();
+            break;
+        case MidiComms::ProgrammeChangeTypes::RESET_TO_DEFAULT_PARAMETERS:
+            resetToDefaultParameters();
+            break;
+        case MidiComms::ProgrammeChangeTypes::CALIBRATE_DAMPED:
+            force_sensing.calibrateDamped();
+            break;
+        case MidiComms::ProgrammeChangeTypes::CALIBRATE_UNDAMPED:
+            force_sensing.calibrateUndamped();
+            break;
+        default:
+            printf("Unknown MIDI programme change (%d) received\r\n", programme);
+            break;
+    }
+}
+
+void txForceSenseVal(sample_t force_sense_val)
+{
+    uint8_t force_sense_byte = static_cast<uint8_t>(127 * force_sense_val);
+    usbMIDI.sendControlChange(static_cast<uint8_t>(MidiComms::ControlChangeTypes::TX_FORCE_SENSE), force_sense_byte, 1);
+}
+
+void blinkLED() {
+    static bool led_state = false;
+    led_state = !led_state;
+    digitalWrite(LED_BUILTIN, led_state);
+}
+
+void setResonantFrequency(sample_t resonant_frequency_hz)
+{
+    current_cancellation_setup.resonant_frequency_hz = resonant_frequency_hz;
+    force_sensing.setResonantFrequencyHz(resonant_frequency_hz);
+    transducer_processing.setResonantFrequencyHz(resonant_frequency_hz);
+    transducer_processing.setOscillatorFrequencyHz(resonant_frequency_hz);
+}
+
+void resetToDefaultParameters()
+{
+    current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
+    current_cancellation_setup.resonance_peak_gain_db = -18.3;
+    current_cancellation_setup.resonance_q = 10.0;
+    current_cancellation_setup.resonance_tone_level_db = -50.0;
+    current_cancellation_setup.inductance_filter_coefficient = 0.5;
+    current_cancellation_setup.transducer_input_wideband_gain_db = 0.0;
+    current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
+    current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
+    current_cancellation_setup.lowpass_transducer_io = false;
+    transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
+    transducer_processing.setup(current_cancellation_setup);
+
+    force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
+    force_sensing.setWindowSizePeriods(20);
+
+    printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
+}
+
+void sendSerialDetails()
+{
+    printf("Device details:\r\n");
+    printf("Serial number: %d\r\n",serial_number);
+    printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
+    printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
+    printf("Version notes: %s\r\n",VERSION_NOTES);
+    printf("Current resonant frequency: %fHz\r\n",current_cancellation_setup.resonant_frequency_hz);
 }

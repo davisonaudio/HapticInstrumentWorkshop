@@ -89,7 +89,7 @@ class TeensyEeprom
             FloatByteConverter float_to_byte;
             float_to_byte.float_val = float_to_write;
 
-            for (int i = 0 ; i < sizeof(float) ; i++ )
+            for (unsigned int i = 0 ; i < sizeof(float) ; i++ )
             {
                 EEPROM.write(eeprom_address + i, float_to_byte.byte_vals[i]);
             }
@@ -103,7 +103,7 @@ class TeensyEeprom
         {
             FloatByteConverter bytes_to_float;
 
-            for (int i = 0 ; i < sizeof(float) ; i++ )
+            for (unsigned int i = 0 ; i < sizeof(float) ; i++ )
             {
                 bytes_to_float.byte_vals[i] = EEPROM.read(eeprom_address + i);
             }

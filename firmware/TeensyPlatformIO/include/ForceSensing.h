@@ -20,10 +20,13 @@ public:
     void setResonantFrequencyHz(sample_t resonant_freq_hz);
     void setWindowSizePeriods(int window_size_periods);
 
+    bool valueAvailable();
+
     void process(sample_t actuation_sample, sample_t sensed_sample);
 
     sample_t getDamping();
     int getWindowSizeSamples();
+    int getWindowSizePeriods();
 
     /* 
      * This function should be called when the transducer is damped. it stores the last raw val as the calibration value
@@ -71,6 +74,7 @@ private:
     sample_t m_last_raw_difference_val;
 
     bool m_debug_raw_print_enabled = false;
+    bool m_new_val_flag = false;
 
 };
 
@@ -107,6 +111,13 @@ void ForceSensing::setWindowSizePeriods(int window_size_periods)
     reset();
 }
 
+bool ForceSensing::valueAvailable()
+{
+    bool flag_state = m_new_val_flag;
+    m_new_val_flag = false; //reset flag
+    return flag_state;
+}
+
 void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
 {
     //Apply window to signals & feed into Goertzel
@@ -115,10 +126,10 @@ void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
     if (m_actuation_signal_goertzel.checkNewValFlag())
     {
         m_last_raw_difference_val = m_actuation_signal_goertzel.getLastMagnitude() - m_sensed_signal_goertzel.getLastMagnitude();
+        m_new_val_flag = true;
         if (m_debug_raw_print_enabled)
         {
-            Serial.print("Force sense val:");
-            Serial.println(m_last_raw_difference_val);
+            printf("Raw force sense vals: actuation: %f, sense: %f \r\n",m_actuation_signal_goertzel.getLastMagnitude(), m_sensed_signal_goertzel.getLastMagnitude());
         }
     }
 }
@@ -128,14 +139,26 @@ sample_t ForceSensing::getDamping()
     return mapRawValue(m_last_raw_difference_val);
 }
 
+int ForceSensing::getWindowSizeSamples()
+{
+    return m_actuation_signal_goertzel.getWindowLengthSamples();
+}
+
+int ForceSensing::getWindowSizePeriods()
+{
+    return m_actuation_signal_goertzel.getWindowLengthPeriods();
+}
+
 void ForceSensing::calibrateUndamped()
 {
     m_undamped_calibration_val = m_last_raw_difference_val;
+    printf("New undamped calibration value: %f \r\n", m_undamped_calibration_val);
 }
 
 void ForceSensing::calibrateDamped()
 {
     m_damped_calibration_val = m_last_raw_difference_val;
+    printf("New damped calibration value: %f \r\n", m_damped_calibration_val);
 }
 
 sample_t ForceSensing::mapRawValue(sample_t raw_val)
