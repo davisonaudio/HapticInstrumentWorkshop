@@ -152,7 +152,7 @@ function downloadLogging() {
 
 function logPrint(log_str) {
   copy(0, 0, width, height, 0, -20, width, height);
-  text(log_str, 10, height-20);
+  text(log_str, 10, height-40);
   append(logging_strings,log_str);
 }
 

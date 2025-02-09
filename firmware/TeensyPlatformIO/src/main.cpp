@@ -29,8 +29,8 @@
 #define MAX_SERIAL_INPUT_CHARS 256
 
 static const unsigned int VERSION_MAJ = 0;
-static const unsigned int VERSION_MIN = 1;
-const char VERSION_NOTES[] = "Debug for testing, lowpass disabled. L = V, R = I";
+static const unsigned int VERSION_MIN = 2;
+const char VERSION_NOTES[] = "Pre-release version. Still need to implement MIDI output for force sensing.";
 
 
 // Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
@@ -104,6 +104,7 @@ void blinkLED();
 void readAndApplyEepromParameters();
 void writeEepromParameters();
 void resetToDefaultParameters();
+void sendSerialDetails();
 
 void rxPitchChange(uint8_t channel, int pitch);
 void rxProgrammeChange(uint8_t channel, uint8_t programme);
@@ -126,10 +127,8 @@ void setup() {
     //Setup pin 2 to input due to hardware mod (pin 32 is i2s output and connected to pin 2). DO NOT USE PIN 2 AS AN OUTPUT!!
     pinMode(2, INPUT);
 
-    printf("Teensy has booted. Serial number: %d\r\n",serial_number);
-    printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
-    printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
-    printf("Version notes: %s\r\n",VERSION_NOTES);
+    printf("Teensy has booted.\r\n");
+    sendSerialDetails();
 
     //Configure amp IC over i2c
     max98389 max;
@@ -290,6 +289,7 @@ void setErrorState(ErrorStates error_state)
     case ErrorStates::NORMAL_OPERATION:
         printf(" Entering normal operation.\r\n");
         led_blink_timer.update(LED_BLINK_INTERVAL_NORMAL_OPERATION);
+        sendSerialDetails();
         break;
 
     case ErrorStates::AMP_NOT_CONFIGURED:
@@ -455,4 +455,13 @@ void resetToDefaultParameters()
     force_sensing.setWindowSizePeriods(20);
 
     printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
+}
+
+void sendSerialDetails()
+{
+    printf("Device details:\r\n");
+    printf("Serial number: %d\r\n",serial_number);
+    printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
+    printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
+    printf("Version notes: %s\r\n",VERSION_NOTES);
 }
