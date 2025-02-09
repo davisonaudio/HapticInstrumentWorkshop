@@ -28,9 +28,9 @@
 
 #define MAX_SERIAL_INPUT_CHARS 256
 
-static const unsigned int VERSION_MAJ = 0;
-static const unsigned int VERSION_MIN = 2;
-const char VERSION_NOTES[] = "Pre-release version. Still need to implement MIDI output for force sensing.";
+static const unsigned int VERSION_MAJ = 1;
+static const unsigned int VERSION_MIN = 0;
+const char VERSION_NOTES[] = "Initial release version. Still further implementation for MIDI control required but basic force sensing works.";
 
 
 // Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
