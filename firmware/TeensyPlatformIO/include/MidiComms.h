@@ -30,7 +30,7 @@ public:
 
     enum class ControlChangeTypes
     {
-
+        TX_FORCE_SENSE = 0
     };
 
     enum class PitchBendChannels

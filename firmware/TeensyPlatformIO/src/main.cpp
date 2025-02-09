@@ -109,6 +109,7 @@ void sendSerialDetails();
 void rxPitchChange(uint8_t channel, int pitch);
 void rxProgrammeChange(uint8_t channel, uint8_t programme);
 void setResonantFrequency(sample_t resonant_frequency_hz);
+void txForceSenseVal(sample_t force_sense_val);
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
 
@@ -154,7 +155,7 @@ void setup() {
     writeEepromParameters();
 #endif
     
-    //readAndApplyEepromParameters();
+    readAndApplyEepromParameters();
 
     printf("Resonant frequency: %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 
@@ -247,6 +248,10 @@ void loop() {
         bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
+        if (force_sensing.valueAvailable())
+        {
+            txForceSenseVal(force_sensing.getDamping());
+        }
         // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 1) == 0) //10x per second
         // {
         //     printf("Force sense val: %f\r\n", force_sensing.);
@@ -426,6 +431,12 @@ void rxProgrammeChange(uint8_t channel, uint8_t programme)
             printf("Unknown MIDI programme change (%d) received\r\n", programme);
             break;
     }
+}
+
+void txForceSenseVal(sample_t force_sense_val)
+{
+    uint8_t force_sense_byte = static_cast<uint8_t>(127 * force_sense_val);
+    usbMIDI.sendControlChange(static_cast<uint8_t>(MidiComms::ControlChangeTypes::TX_FORCE_SENSE), force_sense_byte, 1);
 }
 
 void blinkLED() {
