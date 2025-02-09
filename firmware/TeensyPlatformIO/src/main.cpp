@@ -390,10 +390,14 @@ void processSerialInput(char new_char)
 
 void rxPitchChange(uint8_t channel, int pitch)
 {
+    //Library parses MIDI channels as 1-16. Subtract 1 to make it 0-15.
+    channel--;
+
+    // printf("Pitch bend: %f on channel %d\r\n",MidiComms::pitchBendToNormalised(pitch), channel);
     switch (static_cast<MidiComms::PitchBendChannels>(channel))
     {
         case MidiComms::PitchBendChannels::RESONANT_FREQUENCY:
-            setResonantFrequency(pitch);
+            setResonantFrequency(pitch - MidiComms::MIN_PITCH_BEND_VALUE);
             break;
 
         default:
@@ -435,6 +439,7 @@ void setResonantFrequency(sample_t resonant_frequency_hz)
     current_cancellation_setup.resonant_frequency_hz = resonant_frequency_hz;
     force_sensing.setResonantFrequencyHz(resonant_frequency_hz);
     transducer_processing.setResonantFrequencyHz(resonant_frequency_hz);
+    transducer_processing.setOscillatorFrequencyHz(resonant_frequency_hz);
 }
 
 void resetToDefaultParameters()
@@ -464,4 +469,5 @@ void sendSerialDetails()
     printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
+    printf("Current resonant frequency: %fHz\r\n",current_cancellation_setup.resonant_frequency_hz);
 }
