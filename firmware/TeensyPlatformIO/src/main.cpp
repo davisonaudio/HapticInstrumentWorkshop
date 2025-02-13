@@ -230,8 +230,8 @@ void loop() {
         sample_t usb_out_l, usb_out_r, amp_out;
         if (current_error_state == ErrorStates::DEBUG)
         {
-            usb_out_l = amp_in_voltage;
-            usb_out_r = amp_in_current;
+            usb_out_l = amp_in_current;
+            usb_out_r = processed.input_feedback_removed;
             amp_out = usb_in_l;
         }
         else
