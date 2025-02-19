@@ -1,6 +1,8 @@
 # HapticInstrumentWorkshop
 Repository for the self-sensing vibrotactile haptic instrument design project. Part of the Augmented Instruments Lab at Imperial College London
 
+For more information on using the kit and detailed documentation, visit the [wiki](https://github.com/davisonaudio/HapticInstrumentWorkshop/wiki).
+
 # Kit Contents
 
 - 1x Teensy 4.0 Microcontroller development board with headers
