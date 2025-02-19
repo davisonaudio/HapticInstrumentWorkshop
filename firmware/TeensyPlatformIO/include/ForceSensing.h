@@ -11,6 +11,7 @@ Date: 14/06/2024
 
 #include "au_GoertzelAlgorithm.h"
 #include "au_Windowing.h"
+#include "au_Onepole.h"
 
 class ForceSensing
 {
@@ -44,6 +45,10 @@ public:
 
     void setRawDampedValue(float raw_damped);
     void setRawUndampedValue(float raw_undamped);
+
+    sample_t getRawDampedValue();
+    sample_t getRawUndampedValue();
+
     void setRawDebugPrint(bool enable_print);
 
     virtual void endOfWindow(){}
@@ -62,6 +67,8 @@ private:
     Windowing m_actuation_signal_window;
     Windowing m_sensing_signal_window;
 
+    Onepole m_force_sense_averaging;
+
     /*
      * Returns a normalised floating point value of the damping where 1 = undamped, 0 = damped
      * Note: damped & undamped calibration methods must be called first, otherwise this function won't do anything useful
@@ -72,6 +79,7 @@ private:
     sample_t m_damped_calibration_val;
 
     sample_t m_last_raw_difference_val;
+    sample_t m_last_mapped_filtered_val;
 
     bool m_debug_raw_print_enabled = false;
     bool m_new_val_flag = false;
@@ -91,6 +99,8 @@ void ForceSensing::setup()
 
     m_actuation_signal_goertzel.setup(setup_parameters);
     m_sensed_signal_goertzel.setup(setup_parameters);
+
+    m_force_sense_averaging.setB1(-0.8);
 
     reset();
 }
@@ -127,6 +137,7 @@ void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
     {
         m_last_raw_difference_val = m_actuation_signal_goertzel.getLastMagnitude() - m_sensed_signal_goertzel.getLastMagnitude();
         m_new_val_flag = true;
+        m_last_mapped_filtered_val = m_force_sense_averaging.process(mapRawValue(m_last_raw_difference_val));
         if (m_debug_raw_print_enabled)
         {
             printf("Raw force sense vals: actuation: %f, sense: %f \r\n",m_actuation_signal_goertzel.getLastMagnitude(), m_sensed_signal_goertzel.getLastMagnitude());
@@ -136,7 +147,7 @@ void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
 
 sample_t ForceSensing::getDamping()
 {
-    return mapRawValue(m_last_raw_difference_val);
+    return m_last_mapped_filtered_val;
 }
 
 int ForceSensing::getWindowSizeSamples()
@@ -164,7 +175,7 @@ void ForceSensing::calibrateDamped()
 sample_t ForceSensing::mapRawValue(sample_t raw_val)
 {
     sample_t value_range = m_undamped_calibration_val - m_damped_calibration_val;
-    sample_t mapped_val = (raw_val - m_damped_calibration_val) * value_range;
+    sample_t mapped_val = (raw_val - m_damped_calibration_val) / value_range;
     if (mapped_val < 0.0)
     {
         mapped_val = 0.0;
@@ -196,6 +207,16 @@ void ForceSensing::setRawDampedValue(float raw_damped)
 void ForceSensing::setRawUndampedValue(float raw_undamped)
 {
     m_undamped_calibration_val = raw_undamped;
+}
+
+sample_t ForceSensing::getRawDampedValue()
+{
+    return m_damped_calibration_val;
+}
+
+sample_t ForceSensing::getRawUndampedValue()
+{
+    return m_undamped_calibration_val;
 }
 
 void ForceSensing::setRawDebugPrint(bool enable_print)

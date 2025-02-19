@@ -191,8 +191,8 @@ void TransducerFeedbackCancellation::setup(Setup setup_parameters)
 
     Biquad::FilterSetup actuation_resonance_filter_setup;
     actuation_resonance_filter_setup.cutoff_freq_hz = setup_parameters.resonant_frequency_hz;
-    actuation_resonance_filter_setup.filter_gain_db = -10.0;
-    actuation_resonance_filter_setup.quality_factor = 4.0;
+    actuation_resonance_filter_setup.filter_gain_db = -16.0;
+    actuation_resonance_filter_setup.quality_factor = setup_parameters.resonance_q;
     actuation_resonance_filter_setup.sample_rate_hz = setup_parameters.sample_rate_hz;
     actuation_resonance_filter_setup.filter_type = Biquad::FilterType::PEAK;
     m_actuation_resonance_filter.setup(actuation_resonance_filter_setup);

@@ -59,8 +59,18 @@ AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
 AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
+
+#ifdef BOARD_VERSION_REV_B
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+#endif
+
+#ifdef BOARD_VERSION_REV_A
+AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
+AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+#endif
+
+
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 
@@ -352,6 +362,8 @@ void readAndApplyEepromParameters()
 
     force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
     force_sensing.setWindowSizePeriods(teensy_eeprom.read(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH));
+    force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
+    force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
 
     printf("Read parameters from flash. Resonant frequency now: %f\r\n", current_cancellation_setup.resonant_frequency_hz);
 
@@ -365,6 +377,9 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::FloatParameters::TONE_LEVEL_DB, current_cancellation_setup.resonance_tone_level_db);
     teensy_eeprom.write(TeensyEeprom::FloatParameters::INDUCTANCE_FILTER_COEFFICIENT, current_cancellation_setup.inductance_filter_coefficient);
     teensy_eeprom.write(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB, current_cancellation_setup.transducer_input_wideband_gain_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE, force_sensing.getRawDampedValue());
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE, force_sensing.getRawUndampedValue());
+
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
     printCurrentTime();
     printf(" Parameters saved to EEPROM.\r\n");
@@ -472,7 +487,7 @@ void resetToDefaultParameters()
     transducer_processing.setup(current_cancellation_setup);
 
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
-    force_sensing.setWindowSizePeriods(20);
+    force_sensing.setWindowSizePeriods(10);
 
     printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 }
