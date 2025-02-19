@@ -74,6 +74,7 @@ public:
 private:
 
     Biquad m_resonance_filter;
+    Biquad m_actuation_resonance_filter;
     Onepole m_series_inductance_filter;
     ToneGenerator m_resonance_tone;
     sample_t m_transducer_input_wideband_gain_lin;
@@ -112,6 +113,7 @@ private:
 void TransducerFeedbackCancellation::setResonantFrequencyHz(sample_t resonant_frequency_hz)
 {
     m_resonance_filter.setCutoff(resonant_frequency_hz);
+    m_actuation_resonance_filter.setCutoff(resonant_frequency_hz);
 }
 
 void TransducerFeedbackCancellation::setOscillatorFrequencyHz(sample_t oscillator_frequency_hz)
@@ -187,6 +189,14 @@ void TransducerFeedbackCancellation::setup(Setup setup_parameters)
 
     m_resonance_filter.setup(resonance_filter_setup);
 
+    Biquad::FilterSetup actuation_resonance_filter_setup;
+    actuation_resonance_filter_setup.cutoff_freq_hz = setup_parameters.resonant_frequency_hz;
+    actuation_resonance_filter_setup.filter_gain_db = -10.0;
+    actuation_resonance_filter_setup.quality_factor = 4.0;
+    actuation_resonance_filter_setup.sample_rate_hz = setup_parameters.sample_rate_hz;
+    actuation_resonance_filter_setup.filter_type = Biquad::FilterType::PEAK;
+    m_actuation_resonance_filter.setup(actuation_resonance_filter_setup);
+
     //Setup of series inductance modelling filter (causes rise in impedance at HF) using onepole filter
     m_series_inductance_filter.setB1(setup_parameters.inductance_filter_coefficient);
 
@@ -229,8 +239,8 @@ TransducerFeedbackCancellation::ProcessedSamples TransducerFeedbackCancellation:
 
         processed.input_feedback_removed = processed.transducer_return_with_gain_applied - processed.modelled_signal;
 
-        //Process output to transducer
-        processed.output_to_transducer = unprocessed.output_to_transducer;
+        //Process output to transducer (reduce gain at resonance for better force sensing)
+        processed.output_to_transducer = m_actuation_resonance_filter.process(unprocessed.output_to_transducer);
 
         if (m_lowpass_filters_enabled)
         { //Filter to signal to/from transducer

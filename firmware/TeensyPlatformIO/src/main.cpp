@@ -15,6 +15,10 @@
 
 #define teensy_sample_t int16_t
 
+
+// #define BOARD_VERSION_REV_A
+#define BOARD_VERSION_REV_B
+
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
