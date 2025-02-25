@@ -122,6 +122,7 @@ void sendSerialDetails();
 
 void rxPitchChange(uint8_t channel, int pitch);
 void rxProgrammeChange(uint8_t channel, uint8_t programme);
+void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_value);
 void setResonantFrequency(sample_t resonant_frequency_hz);
 void txForceSenseVal(sample_t force_sense_val);
 
@@ -175,6 +176,7 @@ void setup() {
 
     usbMIDI.setHandlePitchChange(rxPitchChange);
     usbMIDI.setHandleProgramChange(rxProgrammeChange);
+    usbMIDI.setHandleControlChange(rxControlChange);
 
     //Begin audio buffer queues
     queue_inL_usb.begin();
@@ -448,6 +450,19 @@ void rxProgrammeChange(uint8_t channel, uint8_t programme)
             break;
         default:
             printf("Unknown MIDI programme change (%d) received\r\n", programme);
+            break;
+    }
+}
+
+void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_value)
+{
+    switch (static_cast<MidiComms::ControlChangeTypes>(control_number))
+    {
+        case MidiComms::ControlChangeTypes::TONE_LEVEL:
+            transducer_processing.setResonanceToneLevelDb( dBToLin(  ((sample_t) control_value - 127.0)));
+            break;
+        default:
+            printf("Unknown MIDI control change (%d) received\r\n", control_number);
             break;
     }
 }

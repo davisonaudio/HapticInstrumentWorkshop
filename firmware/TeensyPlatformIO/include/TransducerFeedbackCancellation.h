@@ -247,7 +247,7 @@ TransducerFeedbackCancellation::ProcessedSamples TransducerFeedbackCancellation:
             processed.output_to_transducer = m_output_to_transducer_lowpass.process(processed.output_to_transducer);
             processed.input_feedback_removed = m_input_from_transducer_lowpass.process(processed.input_feedback_removed);
         }
-        processed.output_to_transducer = processed.output_to_transducer + m_resonance_tone.process();
+        processed.output_to_transducer = processed.output_to_transducer + (0.1 * m_resonance_tone.process());
     }
 
     else if(amplifier_type == AmplifierType::VOLTAGE_DRIVE){
