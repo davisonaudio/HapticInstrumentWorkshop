@@ -41,15 +41,18 @@ class TeensyEeprom
 
         enum class ByteParameters
         {
-            GOERTZEL_WINDOW_LENGTH = 0,
-            SERIAL_NUMBER
+            SERIAL_NUMBER = 0,
+            GOERTZEL_WINDOW_LENGTH,
+            
+            NUM_BYTE_PARAMETERS = 32 // Leave buffer of 30 to enable additional byte parameters while maintaining backwards compatibility
         };
 
         static const int NUM_EEPROM_BYTES = 1080; //Correct for Teensy 4.0
         static constexpr int BYTES_PER_FLOAT = sizeof(float);
 
-        static constexpr int FLOATS_BASE = 0;
-        static constexpr int BYTES_BASE = BYTES_PER_FLOAT * static_cast<int>(FloatParameters::NUM_FLOAT_PARAMETERS);
+        
+        static constexpr int BYTES_BASE = 0;
+        static constexpr int FLOATS_BASE = BYTES_BASE + static_cast<int>(ByteParameters::NUM_BYTE_PARAMETERS);
 
         void write(ByteParameters byte_parameter, uint8_t value)
         {
