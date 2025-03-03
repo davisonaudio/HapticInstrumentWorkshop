@@ -15,15 +15,17 @@
 
 #define teensy_sample_t int16_t
 
+//Board revision definitions (only define one):
+#define BOARD_VERSION_REV_A
+//#define BOARD_VERSION_REV_B
 
-// #define BOARD_VERSION_REV_A
-#define BOARD_VERSION_REV_B
+#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 0
+#define TEENSY_SERIAL_NUMBER 11
 #endif
 
 #define INITIALISE_EEPROM_VALUES 0
@@ -32,8 +34,15 @@
 
 #define MAX_SERIAL_INPUT_CHARS 256
 
+#if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
 static const unsigned int VERSION_MIN = 0;
+#else
+//Set version number to 255.255 for debug builds to avoid confusion
+static const unsigned int VERSION_MAJ = 255;
+static const unsigned int VERSION_MIN = 255;
+#endif
+
 const char VERSION_NOTES[] = "Initial release version. Still further implementation for MIDI control required but basic force sensing works.";
 
 
@@ -66,8 +75,8 @@ AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
 #endif
 
 #ifdef BOARD_VERSION_REV_A
-AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
-AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 1);
+AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 0);
 #endif
 
 
