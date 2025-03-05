@@ -14,6 +14,12 @@ For more information on using the kit and detailed documentation, visit the [wik
 # Getting Started
 The Teensy 4.0 will come preloaded with the required firmware and mounted with its headers onto the top of the amplifier board. 
 
+# Cloning the repo
+To get a local copy of this repository (for editing the firmware or hardware files included), run the following command:
+> git clone --recurse-submodules https://github.com/davisonaudio/HapticInstrumentWorkshop.git
+
+This will clone the main repo as well as the audio-utils submodule within the firmware folder.
+
 # Hacking the Hardware
 
 It is unlikely that the PCB is something that we be modified as part of this study. For those with sufficient electronics knowledge, however, the design files (schematic and PCB PDFs along with KiCAD files) can be found in the hardware folder of this repo.
