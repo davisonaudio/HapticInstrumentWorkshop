@@ -32,7 +32,7 @@ let debug_mode = false;
 
 
 function setup() {
-  createCanvas(700, 500);
+  createCanvas(1000, 500);
   background(220);
   
   textSize(12);
@@ -47,7 +47,7 @@ function setup() {
     port.open(usedPorts[0], 115200);
   }
 
-  let x_pos_of_column = 500;
+  let x_pos_of_column = 800;
   let serialText = text("Serial Controls", x_pos_of_column, 20);
   connectBtn = createButton('Connect Serial');
   connectBtn.position(x_pos_of_column, 30);
@@ -63,9 +63,9 @@ function setup() {
   
   
   
-  text("MIDI Controls", x_pos_of_column, downloadLoggingBtn.position().y + 30 + 20);
+  text("MIDI Controls", x_pos_of_column, downloadLoggingBtn.position().y + 30 + 120);
   midiInPortDropdown = createSelect();
-  midiInPortDropdown.position(x_pos_of_column, downloadLoggingBtn.position().y + 60);
+  midiInPortDropdown.position(x_pos_of_column, downloadLoggingBtn.position().y + 160);
   midiInPortDropdown.option("None");
   
   midiInConnectBtn = createButton("Connect MIDI In");
@@ -92,7 +92,7 @@ function setup() {
   calibrateUndampedButton.position(x_pos_of_column, calibrateDampedButton.position().y + 30);
   calibrateUndampedButton.mousePressed(calibrateUndamped);
 
-  resetToDefaultParametersButton = createButton("Reset to Defaults");
+  resetToDefaultParametersButton = createButton("Reset Parameters to Defaults");
   resetToDefaultParametersButton.position(x_pos_of_column, calibrateUndampedButton.position().y + 30);
   resetToDefaultParametersButton.mousePressed(resetParameters);
 
@@ -162,7 +162,7 @@ function downloadLogging() {
 }
 
 function logPrint(log_str) {
-  copy(0, 0, width, height, 0, -20, width, height);
+  copy(0, 0, width - 200, height, 0, -20, width - 200, height);
   text(log_str, 10, height-40);
   append(logging_strings,log_str);
 }
