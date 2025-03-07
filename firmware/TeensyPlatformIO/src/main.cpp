@@ -16,18 +16,20 @@
 #define teensy_sample_t int16_t
 
 //Board revision definitions (only define one):
-#define BOARD_VERSION_REV_A
-//#define BOARD_VERSION_REV_B
+// #define BOARD_VERSION_REV_A
+#define BOARD_VERSION_REV_B
 
 #define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
-// Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
+// Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 11
+#define TEENSY_SERIAL_NUMBER 6
 #endif
 
+//If enabled, this initialises the parameters stored in the EEPROM to their default values.
+//Once done, this option should be disabled, the firmware recompiled and reflashed to avoid writing to the EEPROM at every startup (overwriting the existing values).
 #define INITIALISE_EEPROM_VALUES 0
 
 #define RESONANT_FREQ_HZ 89.0
@@ -468,7 +470,11 @@ void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_va
     switch (static_cast<MidiComms::ControlChangeTypes>(control_number))
     {
         case MidiComms::ControlChangeTypes::TONE_LEVEL:
-            transducer_processing.setResonanceToneLevelDb( dBToLin(  ((sample_t) control_value - 127.0)));
+            if (current_error_state == ErrorStates::DEBUG)
+            {
+                printf("MIDI CC - Tone Level: %fdB (raw CC val: %d)\r\n", dBToLin(  ((sample_t) control_value - 127.0)), control_value);
+            }
+            transducer_processing.setResonanceToneLevelDb( (sample_t) control_value - 127.0);
             break;
         default:
             printf("Unknown MIDI control change (%d) received\r\n", control_number);

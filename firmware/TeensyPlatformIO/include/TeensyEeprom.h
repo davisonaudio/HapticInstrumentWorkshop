@@ -42,9 +42,16 @@ class TeensyEeprom
         enum class ByteParameters
         {
             SERIAL_NUMBER = 0,
+            BOARD_REVISION,
             GOERTZEL_WINDOW_LENGTH,
             
-            NUM_BYTE_PARAMETERS = 32 // Leave buffer of 30 to enable additional byte parameters while maintaining backwards compatibility
+            NUM_BYTE_PARAMETERS = 128 // Leave buffer to enable additional byte parameters while maintaining backwards compatibility
+        };
+
+        enum class BoardRevision
+        { //Amplifier PCB revision (affects i2s pin assignment)
+            REV_A = 0,
+            REV_B
         };
 
         static const int NUM_EEPROM_BYTES = 1080; //Correct for Teensy 4.0
@@ -71,6 +78,16 @@ class TeensyEeprom
         float read(FloatParameters float_parameter)
         {
             return readFloat(getEepromAddress(float_parameter));
+        }
+
+        void writeBoardRevision(BoardRevision board_revision)
+        {
+            write(ByteParameters::BOARD_REVISION, static_cast<uint8_t>(board_revision));
+        }
+
+        BoardRevision readBoardRevision()
+        {
+            return static_cast<BoardRevision>(read(ByteParameters::BOARD_REVISION));
         }
 
 
