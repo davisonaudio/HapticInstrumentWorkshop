@@ -15,22 +15,37 @@
 
 #define teensy_sample_t int16_t
 
+//Board revision definitions (only define one):
+// #define BOARD_VERSION_REV_A
+#define BOARD_VERSION_REV_B
+
+#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
+
 // Write the defined serial number byte to EEPROM when flashing if enabled
-// Once done, disable the write to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
+// Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 0
+#define TEENSY_SERIAL_NUMBER 7
 #endif
 
+//If enabled, this initialises the parameters stored in the EEPROM to their default values.
+//Once done, this option should be disabled, the firmware recompiled and reflashed to avoid writing to the EEPROM at every startup (overwriting the existing values).
 #define INITIALISE_EEPROM_VALUES 0
 
 #define RESONANT_FREQ_HZ 89.0
 
 #define MAX_SERIAL_INPUT_CHARS 256
 
+#if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 0;
-const char VERSION_NOTES[] = "Initial release version. Still further implementation for MIDI control required but basic force sensing works.";
+static const unsigned int VERSION_MIN = 1;
+#else
+//Set version number to 255.255 for debug builds to avoid confusion
+static const unsigned int VERSION_MAJ = 255;
+static const unsigned int VERSION_MIN = 255;
+#endif
+
+const char VERSION_NOTES[] = "Added MIDI control of resonant frequency and tone level.";
 
 
 // Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
@@ -55,8 +70,18 @@ AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
 AudioConnection          patchCord3(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
+
+#ifdef BOARD_VERSION_REV_B
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+#endif
+
+#ifdef BOARD_VERSION_REV_A
+AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 1);
+AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 0);
+#endif
+
+
 AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 
@@ -89,6 +114,7 @@ enum class ErrorStates
 };
 
 ErrorStates current_error_state;
+TeensyEeprom::BoardRevision board_revision;
 
 static const unsigned long LED_BLINK_INTERVAL_NORMAL_OPERATION              =  1000000; //1s
 static const unsigned long LED_BLINK_INTERVAL_AMP_NOT_CONFIGURED            =   500000; //500ms
@@ -108,6 +134,7 @@ void sendSerialDetails();
 
 void rxPitchChange(uint8_t channel, int pitch);
 void rxProgrammeChange(uint8_t channel, uint8_t programme);
+void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_value);
 void setResonantFrequency(sample_t resonant_frequency_hz);
 void txForceSenseVal(sample_t force_sense_val);
 
@@ -161,6 +188,7 @@ void setup() {
 
     usbMIDI.setHandlePitchChange(rxPitchChange);
     usbMIDI.setHandleProgramChange(rxProgrammeChange);
+    usbMIDI.setHandleControlChange(rxControlChange);
 
     //Begin audio buffer queues
     queue_inL_usb.begin();
@@ -230,8 +258,8 @@ void loop() {
         sample_t usb_out_l, usb_out_r, amp_out;
         if (current_error_state == ErrorStates::DEBUG)
         {
-            usb_out_l = amp_in_voltage;
-            usb_out_r = amp_in_current;
+            usb_out_l = amp_in_current;
+            usb_out_r = processed.input_feedback_removed;
             amp_out = usb_in_l;
         }
         else
@@ -348,8 +376,11 @@ void readAndApplyEepromParameters()
 
     force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
     force_sensing.setWindowSizePeriods(teensy_eeprom.read(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH));
+    force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
+    force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
 
-    printf("Read parameters from flash. Resonant frequency now: %f\r\n", current_cancellation_setup.resonant_frequency_hz);
+    printf("Read parameters from flash. Parameters were stored in V%d.%d. Resonant frequency now: %f\r\n",teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION), teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION), current_cancellation_setup.resonant_frequency_hz);
+    
 
 }
 
@@ -361,7 +392,12 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::FloatParameters::TONE_LEVEL_DB, current_cancellation_setup.resonance_tone_level_db);
     teensy_eeprom.write(TeensyEeprom::FloatParameters::INDUCTANCE_FILTER_COEFFICIENT, current_cancellation_setup.inductance_filter_coefficient);
     teensy_eeprom.write(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB, current_cancellation_setup.transducer_input_wideband_gain_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE, force_sensing.getRawDampedValue());
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE, force_sensing.getRawUndampedValue());
+
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION, VERSION_MIN);
     printCurrentTime();
     printf(" Parameters saved to EEPROM.\r\n");
 }
@@ -433,6 +469,23 @@ void rxProgrammeChange(uint8_t channel, uint8_t programme)
     }
 }
 
+void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_value)
+{
+    switch (static_cast<MidiComms::ControlChangeTypes>(control_number))
+    {
+        case MidiComms::ControlChangeTypes::TONE_LEVEL:
+            if (current_error_state == ErrorStates::DEBUG)
+            {
+                printf("MIDI CC - Tone Level: %fdB (raw CC val: %d)\r\n", dBToLin(  ((sample_t) control_value - 127.0)), control_value);
+            }
+            transducer_processing.setResonanceToneLevelDb( (sample_t) control_value - 127.0);
+            break;
+        default:
+            printf("Unknown MIDI control change (%d) received\r\n", control_number);
+            break;
+    }
+}
+
 void txForceSenseVal(sample_t force_sense_val)
 {
     uint8_t force_sense_byte = static_cast<uint8_t>(127 * force_sense_val);
@@ -468,7 +521,7 @@ void resetToDefaultParameters()
     transducer_processing.setup(current_cancellation_setup);
 
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
-    force_sensing.setWindowSizePeriods(20);
+    force_sensing.setWindowSizePeriods(10);
 
     printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 }
