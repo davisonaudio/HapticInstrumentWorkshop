@@ -19,7 +19,7 @@
 // #define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
-#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
+#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
@@ -280,11 +280,6 @@ void loop() {
         {
             txForceSenseVal(force_sensing.getDamping());
         }
-        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 1) == 0) //10x per second
-        // {
-        //     printf("Force sense val: %f\r\n", force_sensing.);
-        // }
-        //TODO: Get force sense reading and send over MIDI (print initially)
 
         total_sample_count++;
     }
@@ -423,6 +418,16 @@ void processSerialInput(char new_char)
         else if (!strncmp(serial_input_buffer, "normal\n", strlen("normal\n")))
         {
             setErrorState(ErrorStates::NORMAL_OPERATION);
+        }
+        else
+        {
+            char* token = strtok(serial_input_buffer, " "); //Split input string on space
+            if (!strncmp(token, "r_freq", strlen("r_freq")))
+            {
+                token = strtok(NULL, " ");
+                setResonantFrequency(atof(token));
+                printf("Resonant frequency set to: %fHz\r\n", atof(token));
+            }
         }
 
         input_char_index = 0;

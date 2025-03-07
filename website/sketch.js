@@ -18,6 +18,9 @@ let calibrateDampedButton;
 let calibrateUndampedButton;
 let resetToDefaultParametersButton;
 
+let serialInputTextbox;
+let serialInputButton;
+
 let resonantFrequencySlider
 
 let midiIn;
@@ -92,6 +95,14 @@ function setup() {
   resetToDefaultParametersButton = createButton("Reset to Defaults");
   resetToDefaultParametersButton.position(x_pos_of_column, calibrateUndampedButton.position().y + 30);
   resetToDefaultParametersButton.mousePressed(resetParameters);
+
+  serialInputTextbox = createInput("");
+  serialInputTextbox.position(10, 470);
+  serialInputTextbox.size(300);
+
+  serialInputButton = createButton("Send Serial");
+  serialInputButton.position(320, 470);
+  serialInputButton.mousePressed(sendSerialText);
   
   resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
   
@@ -194,4 +205,9 @@ function resetParameters() {
 
 function sendResonantFreq() {
   
+}
+
+function sendSerialText(){
+  port.write(serialInputTextbox.value() + "\n");
+  serialInputTextbox.value("");
 }
