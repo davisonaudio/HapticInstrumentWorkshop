@@ -19,13 +19,13 @@
 // #define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
-#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
+#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 6
+#define TEENSY_SERIAL_NUMBER 7
 #endif
 
 //If enabled, this initialises the parameters stored in the EEPROM to their default values.
@@ -38,14 +38,14 @@
 
 #if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 0;
+static const unsigned int VERSION_MIN = 1;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
 static const unsigned int VERSION_MIN = 255;
 #endif
 
-const char VERSION_NOTES[] = "Initial release version. Still further implementation for MIDI control required but basic force sensing works.";
+const char VERSION_NOTES[] = "Added MIDI control of resonant frequency and tone level.";
 
 
 // Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
@@ -114,6 +114,7 @@ enum class ErrorStates
 };
 
 ErrorStates current_error_state;
+TeensyEeprom::BoardRevision board_revision;
 
 static const unsigned long LED_BLINK_INTERVAL_NORMAL_OPERATION              =  1000000; //1s
 static const unsigned long LED_BLINK_INTERVAL_AMP_NOT_CONFIGURED            =   500000; //500ms
@@ -378,7 +379,8 @@ void readAndApplyEepromParameters()
     force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
     force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
 
-    printf("Read parameters from flash. Resonant frequency now: %f\r\n", current_cancellation_setup.resonant_frequency_hz);
+    printf("Read parameters from flash. Parameters were stored in V%d.%d. Resonant frequency now: %f\r\n",teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION), teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION), current_cancellation_setup.resonant_frequency_hz);
+    
 
 }
 
@@ -394,6 +396,8 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE, force_sensing.getRawUndampedValue());
 
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
+    teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION, VERSION_MIN);
     printCurrentTime();
     printf(" Parameters saved to EEPROM.\r\n");
 }

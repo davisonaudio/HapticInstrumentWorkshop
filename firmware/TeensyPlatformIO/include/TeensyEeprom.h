@@ -43,6 +43,8 @@ class TeensyEeprom
         {
             SERIAL_NUMBER = 0,
             BOARD_REVISION,
+            LAST_SAVED_MAJ_VERSION,
+            LAST_SAVED_MIN_VERSION,
             GOERTZEL_WINDOW_LENGTH,
             
             NUM_BYTE_PARAMETERS = 128 // Leave buffer to enable additional byte parameters while maintaining backwards compatibility
