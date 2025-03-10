@@ -11,6 +11,7 @@
 #include "TransducerFeedbackCancellation.h"
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
+#include "TeensySerialCommands.h"
 #include "MidiComms.h"
 
 #define teensy_sample_t int16_t
@@ -432,7 +433,7 @@ void processSerialInput(char new_char)
             char* value_arg = strtok(NULL, " ");
 
             //Check for resonant frequency command
-            if (!strncmp(parameter_arg, "rf", strlen("rf")))
+            if (!strncmp(parameter_arg, SerialCommands::kResonantFreqString, strlen(SerialCommands::kResonantFreqString)))
             {
                 if (value_arg)
                 { //Set the resonant frequency to the provided value
@@ -446,7 +447,7 @@ void processSerialInput(char new_char)
             }
 
             //Check for tone level command
-            else if (!strncmp(parameter_arg, "tl", strlen("tl")))
+            else if (!strncmp(parameter_arg, SerialCommands::kToneLevelString, strlen(SerialCommands::kToneLevelString)))
             {
                 if (value_arg)
                 { //Set the resonant frequency to the provided value
@@ -461,7 +462,7 @@ void processSerialInput(char new_char)
 
 
             //Check for resonance q command
-            else if (!strncmp(parameter_arg, "rq", strlen("rq")))
+            else if (!strncmp(parameter_arg, SerialCommands::kResonantQString, strlen(SerialCommands::kResonantQString)))
             {
                 if (value_arg)
                 { //Set the resonance q to the provided value
@@ -475,7 +476,7 @@ void processSerialInput(char new_char)
             }
 
             //Check for resonance gain command
-            else if (!strncmp(parameter_arg, "rg", strlen("rg")))
+            else if (!strncmp(parameter_arg, SerialCommands::kResonantGainString, strlen(SerialCommands::kResonantGainString)))
             {
                 if (value_arg)
                 { //Set the resonance q to the provided value
@@ -489,7 +490,7 @@ void processSerialInput(char new_char)
             }
 
             //Check for wideband gain command
-            else if (!strncmp(parameter_arg, "wg", strlen("wg")))
+            else if (!strncmp(parameter_arg, SerialCommands::kWidebandGainString, strlen(SerialCommands::kWidebandGainString)))
             {
                 if (value_arg)
                 { //Set the resonance q to the provided value
