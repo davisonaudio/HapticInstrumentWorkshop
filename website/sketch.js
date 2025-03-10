@@ -20,6 +20,8 @@ let resetToDefaultParametersButton;
 
 let serialInputTextbox;
 let serialInputButton;
+let recallLastSerialCommandButton;
+let lastSerialInputCommand = "";
 
 let resonantFrequencySlider
 
@@ -103,6 +105,10 @@ function setup() {
   serialInputButton = createButton("Send Serial");
   serialInputButton.position(320, 470);
   serialInputButton.mousePressed(sendSerialText);
+
+  recallLastSerialCommandButton = createButton("Last Command");
+  recallLastSerialCommandButton.position(410, 470);
+  recallLastSerialCommandButton.mousePressed(recallLastCommand);
   
   resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
   
@@ -208,6 +214,11 @@ function sendResonantFreq() {
 }
 
 function sendSerialText(){
+  lastSerialInputCommand = serialInputTextbox.value();
   port.write(serialInputTextbox.value() + "\n");
   serialInputTextbox.value("");
+}
+
+function recallLastCommand(){
+  serialInputTextbox.value(lastSerialInputCommand);
 }

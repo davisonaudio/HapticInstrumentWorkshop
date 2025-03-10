@@ -18,6 +18,8 @@ namespace SerialCommands
     const char* kSaveToEepromString = "save";
     const char* kResetParametersString = "reset_params";
     const char* kHelpString = "help";
+    const char* kCalibrateDamped = "calid";
+    const char* kCalibrateUndamped = "caliu";
 
     const char* kResonantFreqString = "rf";
     const char* kResonantGainString = "rg";
@@ -36,6 +38,8 @@ void printSerialHelp()
     printf("%s - Save current parameters to EEPROM\r\n",SerialCommands::kSaveToEepromString);
     printf("%s - Reset parameters to factory defaults\r\n",SerialCommands::kResetParametersString);
     printf("%s - Display help message (this message currently displayed)\r\n",SerialCommands::kHelpString);
+    printf("%s - Calibrate the damped force sense level\r\n",SerialCommands::kCalibrateDamped);
+    printf("%s - Calibrate the undamped force sense level\r\n",SerialCommands::kCalibrateUndamped);
     
     printf("%s <resonant_frequency_hz> - Set the resonant frequency in Hz\r\n",SerialCommands::kResonantFreqString);
     printf("%s <resonant_gain_db> - Set the resonance gain in dB\r\n",SerialCommands::kResonantGainString);

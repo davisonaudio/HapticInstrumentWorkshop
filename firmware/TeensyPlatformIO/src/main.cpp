@@ -439,15 +439,23 @@ void processSerialInput(char new_char)
         {
             writeEepromParameters();
         }
-
         else if (!strncmp(parameter_arg, SerialCommands::kHelpString, strlen(SerialCommands::kHelpString)))
         {
             printSerialHelp();
         }
+        else if (!strncmp(parameter_arg, SerialCommands::kCalibrateDamped, strlen(SerialCommands::kCalibrateDamped)))
+        {
+            force_sensing.calibrateDamped();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kCalibrateUndamped, strlen(SerialCommands::kCalibrateUndamped)))
+        {
+            force_sensing.calibrateUndamped();
+        }
+
         
         
         else
-        {
+        { //Check for arguments that have value parameters
             
 
             //Check for resonant frequency command
