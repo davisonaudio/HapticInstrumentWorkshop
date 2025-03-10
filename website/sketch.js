@@ -18,6 +18,11 @@ let calibrateDampedButton;
 let calibrateUndampedButton;
 let resetToDefaultParametersButton;
 
+let serialInputTextbox;
+let serialInputButton;
+let recallLastSerialCommandButton;
+let lastSerialInputCommand = "";
+
 let resonantFrequencySlider
 
 let midiIn;
@@ -29,7 +34,7 @@ let debug_mode = false;
 
 
 function setup() {
-  createCanvas(700, 500);
+  createCanvas(1000, 1000);
   background(220);
   
   textSize(12);
@@ -44,7 +49,7 @@ function setup() {
     port.open(usedPorts[0], 115200);
   }
 
-  let x_pos_of_column = 500;
+  let x_pos_of_column = 800;
   let serialText = text("Serial Controls", x_pos_of_column, 20);
   connectBtn = createButton('Connect Serial');
   connectBtn.position(x_pos_of_column, 30);
@@ -60,9 +65,9 @@ function setup() {
   
   
   
-  text("MIDI Controls", x_pos_of_column, downloadLoggingBtn.position().y + 30 + 20);
+  text("MIDI Controls", x_pos_of_column, downloadLoggingBtn.position().y + 30 + 120);
   midiInPortDropdown = createSelect();
-  midiInPortDropdown.position(x_pos_of_column, downloadLoggingBtn.position().y + 60);
+  midiInPortDropdown.position(x_pos_of_column, downloadLoggingBtn.position().y + 160);
   midiInPortDropdown.option("None");
   
   midiInConnectBtn = createButton("Connect MIDI In");
@@ -89,9 +94,21 @@ function setup() {
   calibrateUndampedButton.position(x_pos_of_column, calibrateDampedButton.position().y + 30);
   calibrateUndampedButton.mousePressed(calibrateUndamped);
 
-  resetToDefaultParametersButton = createButton("Reset to Defaults");
+  resetToDefaultParametersButton = createButton("Reset Parameters to Defaults");
   resetToDefaultParametersButton.position(x_pos_of_column, calibrateUndampedButton.position().y + 30);
   resetToDefaultParametersButton.mousePressed(resetParameters);
+
+  serialInputTextbox = createInput("");
+  serialInputTextbox.position(10, 470);
+  serialInputTextbox.size(300);
+
+  serialInputButton = createButton("Send Serial");
+  serialInputButton.position(320, 470);
+  serialInputButton.mousePressed(sendSerialText);
+
+  recallLastSerialCommandButton = createButton("Last Command");
+  recallLastSerialCommandButton.position(410, 470);
+  recallLastSerialCommandButton.mousePressed(recallLastCommand);
   
   resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
   
@@ -151,8 +168,8 @@ function downloadLogging() {
 }
 
 function logPrint(log_str) {
-  copy(0, 0, width, height, 0, -20, width, height);
-  text(log_str, 10, height-40);
+  copy(0, 0, width - 200, 500, 0, -20, width - 200, 500);
+  text(log_str, 10, 500-40);
   append(logging_strings,log_str);
 }
 
@@ -194,4 +211,14 @@ function resetParameters() {
 
 function sendResonantFreq() {
   
+}
+
+function sendSerialText(){
+  lastSerialInputCommand = serialInputTextbox.value();
+  port.write(serialInputTextbox.value() + "\n");
+  serialInputTextbox.value("");
+}
+
+function recallLastCommand(){
+  serialInputTextbox.value(lastSerialInputCommand);
 }

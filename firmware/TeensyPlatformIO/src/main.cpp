@@ -11,6 +11,7 @@
 #include "TransducerFeedbackCancellation.h"
 #include "ForceSensing.h"
 #include "TeensyEeprom.h"
+#include "TeensySerialCommands.h"
 #include "MidiComms.h"
 
 #define teensy_sample_t int16_t
@@ -38,7 +39,7 @@
 
 #if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 1;
+static const unsigned int VERSION_MIN = 2;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
@@ -132,10 +133,17 @@ void writeEepromParameters();
 void resetToDefaultParameters();
 void sendSerialDetails();
 
+void setResonantFrequency(sample_t resonant_frequency_hz);
+void setToneLevel(sample_t tone_level_db);
+void setResonanceQ(sample_t resonance_q);
+void setWidebandGain(sample_t wideband_gain_db);
+void setResonanceGain(sample_t resonance_gain_db);
+
+
+// MIDI-related functions
 void rxPitchChange(uint8_t channel, int pitch);
 void rxProgrammeChange(uint8_t channel, uint8_t programme);
 void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_value);
-void setResonantFrequency(sample_t resonant_frequency_hz);
 void txForceSenseVal(sample_t force_sense_val);
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
@@ -280,11 +288,6 @@ void loop() {
         {
             txForceSenseVal(force_sensing.getDamping());
         }
-        // if (total_sample_count % (int)(AUDIO_SAMPLE_RATE_EXACT / 1) == 0) //10x per second
-        // {
-        //     printf("Force sense val: %f\r\n", force_sensing.);
-        // }
-        //TODO: Get force sense reading and send over MIDI (print initially)
 
         total_sample_count++;
     }
@@ -322,7 +325,6 @@ void setErrorState(ErrorStates error_state)
     case ErrorStates::NORMAL_OPERATION:
         printf(" Entering normal operation.\r\n");
         led_blink_timer.update(LED_BLINK_INTERVAL_NORMAL_OPERATION);
-        sendSerialDetails();
         break;
 
     case ErrorStates::AMP_NOT_CONFIGURED:
@@ -416,13 +418,118 @@ void processSerialInput(char new_char)
     serial_input_buffer[input_char_index++] = new_char;
     if (new_char == '\n')
     {
-        if (!strncmp(serial_input_buffer, "debug\n", strlen("debug\n")))
+
+        char* parameter_arg = strtok(serial_input_buffer, " "); //Split input string on space
+        char* value_arg = strtok(NULL, " ");
+
+        if (!strncmp(parameter_arg, SerialCommands::kDebugModeString, strlen(SerialCommands::kDebugModeString)))
         {
             setErrorState(ErrorStates::DEBUG);
         }
-        else if (!strncmp(serial_input_buffer, "normal\n", strlen("normal\n")))
+        else if (!strncmp(parameter_arg, SerialCommands::kNormalModeString, strlen(SerialCommands::kNormalModeString)))
         {
             setErrorState(ErrorStates::NORMAL_OPERATION);
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
+        {
+            resetToDefaultParameters();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kSaveToEepromString, strlen(SerialCommands::kSaveToEepromString)))
+        {
+            writeEepromParameters();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kHelpString, strlen(SerialCommands::kHelpString)))
+        {
+            printSerialHelp();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kCalibrateDamped, strlen(SerialCommands::kCalibrateDamped)))
+        {
+            force_sensing.calibrateDamped();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kCalibrateUndamped, strlen(SerialCommands::kCalibrateUndamped)))
+        {
+            force_sensing.calibrateUndamped();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kInfoString, strlen(SerialCommands::kInfoString)))
+        {
+            sendSerialDetails();
+        }
+        
+        else
+        { //Check for arguments that have value parameters
+            
+
+            //Check for resonant frequency command
+            if (!strncmp(parameter_arg, SerialCommands::kResonantFreqString, strlen(SerialCommands::kResonantFreqString)))
+            {
+                if (value_arg)
+                { //Set the resonant frequency to the provided value
+                    setResonantFrequency(atof(value_arg));
+                    printf("Resonant frequency set to: %fHz\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.resonant_frequency_hz);
+                }
+            }
+
+            //Check for tone level command
+            else if (!strncmp(parameter_arg, SerialCommands::kToneLevelString, strlen(SerialCommands::kToneLevelString)))
+            {
+                if (value_arg)
+                { //Set the resonant frequency to the provided value
+                    setToneLevel(atof(value_arg));
+                    printf("Tone level set to: %fdB\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.resonance_tone_level_db);
+                }
+            }
+
+
+            //Check for resonance q command
+            else if (!strncmp(parameter_arg, SerialCommands::kResonantQString, strlen(SerialCommands::kResonantQString)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setResonanceQ(atof(value_arg));
+                    printf("Resonance q set to: %f\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.resonance_q);
+                }
+            }
+
+            //Check for resonance gain command
+            else if (!strncmp(parameter_arg, SerialCommands::kResonantGainString, strlen(SerialCommands::kResonantGainString)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setResonanceGain(atof(value_arg));
+                    printf("Resonance gain set to: %fdB\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.resonance_peak_gain_db);
+                }
+            }
+
+            //Check for wideband gain command
+            else if (!strncmp(parameter_arg, SerialCommands::kWidebandGainString, strlen(SerialCommands::kWidebandGainString)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setWidebandGain(atof(value_arg));
+                    printf("Wideband gain set to: %fdB\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.transducer_input_wideband_gain_db);
+                }
+            }
+           
         }
 
         input_char_index = 0;
@@ -506,6 +613,30 @@ void setResonantFrequency(sample_t resonant_frequency_hz)
     transducer_processing.setOscillatorFrequencyHz(resonant_frequency_hz);
 }
 
+void setToneLevel(sample_t tone_level_db)
+{
+    current_cancellation_setup.resonance_tone_level_db = tone_level_db;
+    transducer_processing.setResonanceToneLevelDb(tone_level_db);
+}
+
+void setResonanceQ(sample_t resonance_q)
+{
+    current_cancellation_setup.resonance_q = resonance_q;
+    transducer_processing.setResonanceQ(resonance_q);
+}
+
+void setWidebandGain(sample_t wideband_gain_db)
+{
+    current_cancellation_setup.transducer_input_wideband_gain_db = wideband_gain_db;
+    transducer_processing.setTransducerInputWidebandGainDb(wideband_gain_db);
+}
+
+void setResonanceGain(sample_t resonance_gain_db)
+{
+    current_cancellation_setup.resonance_peak_gain_db = resonance_gain_db;
+    transducer_processing.setResonancePeakGainDb(resonance_gain_db);
+}
+
 void resetToDefaultParameters()
 {
     current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
@@ -528,7 +659,8 @@ void resetToDefaultParameters()
 
 void sendSerialDetails()
 {
-    printf("Device details:\r\n");
+    printCurrentTime();
+    printf(": Device details:\r\n");
     printf("Serial number: %d\r\n",serial_number);
     printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);

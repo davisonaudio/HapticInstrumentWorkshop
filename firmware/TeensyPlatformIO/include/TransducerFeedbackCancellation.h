@@ -45,6 +45,8 @@ public:
     void setTransducerInputWidebandGainDb(sample_t transducer_input_wideband_gain_db);
     void setAdmittanceFilter();
 
+    sample_t getResonanceToneLevelDb();
+
     struct UnprocessedSamples
     {
         sample_t output_to_transducer;
@@ -174,6 +176,11 @@ void TransducerFeedbackCancellation::setAdmittanceFilter()
     temp_coefficients.b2 = 0.9612116;
     temp.setCoefficients(temp_coefficients);
     admittance_filter.biquads.push_back(temp);
+}
+
+sample_t TransducerFeedbackCancellation::getResonanceToneLevelDb()
+{
+    
 }
 
 
