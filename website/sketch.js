@@ -32,7 +32,7 @@ let debug_mode = false;
 
 
 function setup() {
-  createCanvas(1000, 500);
+  createCanvas(1000, 1000);
   background(220);
   
   textSize(12);
@@ -162,8 +162,8 @@ function downloadLogging() {
 }
 
 function logPrint(log_str) {
-  copy(0, 0, width - 200, height, 0, -20, width - 200, height);
-  text(log_str, 10, height-40);
+  copy(0, 0, width - 200, 500, 0, -20, width - 200, 500);
+  text(log_str, 10, 500-40);
   append(logging_strings,log_str);
 }
 
