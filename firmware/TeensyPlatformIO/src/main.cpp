@@ -419,18 +419,36 @@ void processSerialInput(char new_char)
     serial_input_buffer[input_char_index++] = new_char;
     if (new_char == '\n')
     {
-        if (!strncmp(serial_input_buffer, "debug\n", strlen("debug\n")))
+
+        char* parameter_arg = strtok(serial_input_buffer, " "); //Split input string on space
+        char* value_arg = strtok(NULL, " ");
+
+        if (!strncmp(parameter_arg, SerialCommands::kDebugModeString, strlen(SerialCommands::kDebugModeString)))
         {
             setErrorState(ErrorStates::DEBUG);
         }
-        else if (!strncmp(serial_input_buffer, "normal\n", strlen("normal\n")))
+        else if (!strncmp(parameter_arg, SerialCommands::kNormalModeString, strlen(SerialCommands::kNormalModeString)))
         {
             setErrorState(ErrorStates::NORMAL_OPERATION);
         }
+        else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
+        {
+            resetToDefaultParameters();
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kSaveToEepromString, strlen(SerialCommands::kSaveToEepromString)))
+        {
+            writeEepromParameters();
+        }
+
+        else if (!strncmp(parameter_arg, SerialCommands::kHelpString, strlen(SerialCommands::kHelpString)))
+        {
+            printSerialHelp();
+        }
+        
+        
         else
         {
-            char* parameter_arg = strtok(serial_input_buffer, " "); //Split input string on space
-            char* value_arg = strtok(NULL, " ");
+            
 
             //Check for resonant frequency command
             if (!strncmp(parameter_arg, SerialCommands::kResonantFreqString, strlen(SerialCommands::kResonantFreqString)))
