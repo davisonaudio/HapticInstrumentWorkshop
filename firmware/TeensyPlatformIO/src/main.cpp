@@ -20,7 +20,7 @@
 // #define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
-#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
+#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
@@ -39,7 +39,7 @@
 
 #if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 1;
+static const unsigned int VERSION_MIN = 2;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
