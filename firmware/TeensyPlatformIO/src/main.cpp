@@ -325,7 +325,6 @@ void setErrorState(ErrorStates error_state)
     case ErrorStates::NORMAL_OPERATION:
         printf(" Entering normal operation.\r\n");
         led_blink_timer.update(LED_BLINK_INTERVAL_NORMAL_OPERATION);
-        sendSerialDetails();
         break;
 
     case ErrorStates::AMP_NOT_CONFIGURED:
@@ -451,8 +450,10 @@ void processSerialInput(char new_char)
         {
             force_sensing.calibrateUndamped();
         }
-
-        
+        else if (!strncmp(parameter_arg, SerialCommands::kInfoString, strlen(SerialCommands::kInfoString)))
+        {
+            sendSerialDetails();
+        }
         
         else
         { //Check for arguments that have value parameters
@@ -658,7 +659,8 @@ void resetToDefaultParameters()
 
 void sendSerialDetails()
 {
-    printf("Device details:\r\n");
+    printCurrentTime();
+    printf(": Device details:\r\n");
     printf("Serial number: %d\r\n",serial_number);
     printf("Project compiled on %s at %s\r\n",__DATE__, __TIME__);
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
