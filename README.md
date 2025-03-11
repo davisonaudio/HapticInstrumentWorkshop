@@ -31,7 +31,7 @@ For advanced users, the firmware running on the Teensy can be modified and recom
 
 The firmware is developed for the Teensy using [PlatformIO](https://platformio.org). This provides more flexibility than using the Arduino IDE (as is often used with Teensy and similar boards), but still allows use of the Teensy system's wide array of useful C++ libraries. It also avoids the increased complexities of utilising a proper embedded development environment (such as NXP's MCUXpresso for the Teensy 4.0's NXP RT1060 microcontroller).
 
-Visual Studio Code is required for PlatformIO development. For further details of development environment setup please refer the the readme within the firmware folder.
+Visual Studio Code is required for PlatformIO development. For further details of development environment setup please refer to the wiki.
 
 
 # Publications
@@ -40,3 +40,10 @@ For more information on related research output of this project, please refer to
 - M. Davison, C. J. Webb, M. Ducceschi and A. P. McPherson. A self-sensing haptic actuator for tactile interaction with physical modelling synthesis. *Proc. International Conference on New Interfaces for Musical Expression (NIME)*, Utrecht, Netherlands. 2024. [PDF](http://instrumentslab.org/data/andrew/davison_nime2024.pdf)
 
 - M. Davison and A. P. McPherson. A self-sensing vibrotactile transducer for bidirectional interaction. *Proc. Eurohaptics* (work in progress), Lille, France. 2024. [PDF](http://instrumentslab.org/data/andrew/davison_eurohaptics2024.pdf)
+
+# Contributors
+This project is developed and maintained by Matt Davison. Massive thank you also to the additional contributors who helped this project happen:
+
+- Anna Silver - CAD design of 3D printed elements
+- David Gong - Initial PCB design and firmware bring-up of the amplifier board
+- Prof. Andrew McPherson - Supervision and guidance throughout
