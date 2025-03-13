@@ -35,6 +35,8 @@ class TeensyEeprom
             SAMPLE_RATE_HZ,
             UNDAMPED_CALIBRATION_VALUE,
             DAMPED_CALIBRATION_VALUE,
+            OUTPUT_LPF_CUTOFF_HZ,
+            INPUT_LPF_CUTOFF_HZ,
 
             NUM_FLOAT_PARAMETERS
         };

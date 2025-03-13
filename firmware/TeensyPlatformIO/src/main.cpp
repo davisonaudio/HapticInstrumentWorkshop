@@ -26,7 +26,7 @@
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 7
+#define TEENSY_SERIAL_NUMBER 9
 #endif
 
 //If enabled, this initialises the parameters stored in the EEPROM to their default values.
@@ -39,7 +39,7 @@
 
 #if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 2;
+static const unsigned int VERSION_MIN = 3;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
@@ -138,6 +138,8 @@ void setToneLevel(sample_t tone_level_db);
 void setResonanceQ(sample_t resonance_q);
 void setWidebandGain(sample_t wideband_gain_db);
 void setResonanceGain(sample_t resonance_gain_db);
+void setOutputLowpassFc(sample_t cutoff_frequency_hz);
+void setInputLowpassFc(sample_t cutoff_frequency_hz);
 
 
 // MIDI-related functions
@@ -373,7 +375,7 @@ void readAndApplyEepromParameters()
     current_cancellation_setup.transducer_input_wideband_gain_db =  teensy_eeprom.read(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB);
     current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
-    current_cancellation_setup.lowpass_transducer_io = false;
+    current_cancellation_setup.lowpass_transducer_io = true;
     transducer_processing.setup(current_cancellation_setup);
 
     force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
@@ -381,7 +383,11 @@ void readAndApplyEepromParameters()
     force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
     force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
 
-    printf("Read parameters from flash. Parameters were stored in V%d.%d. Resonant frequency now: %f\r\n",teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION), teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION), current_cancellation_setup.resonant_frequency_hz);
+    uint8_t stored_maj_version = teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION);
+    uint8_t stored_min_version = teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION);
+
+
+    printf("Read parameters from flash. Parameters were stored in V%d.%d. Resonant frequency now: %f\r\n",stored_maj_version, stored_min_version, current_cancellation_setup.resonant_frequency_hz);
     
 
 }
@@ -396,6 +402,8 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::FloatParameters::BROADBAND_GAIN_DB, current_cancellation_setup.transducer_input_wideband_gain_db);
     teensy_eeprom.write(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE, force_sensing.getRawDampedValue());
     teensy_eeprom.write(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE, force_sensing.getRawUndampedValue());
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::OUTPUT_LPF_CUTOFF_HZ, current_cancellation_setup.output_to_transducer_lpf_cutoff_hz);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ, current_cancellation_setup.input_from_transducer_lpf_cutoff_hz);
 
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
@@ -529,6 +537,34 @@ void processSerialInput(char new_char)
                     printf("%f\n", current_cancellation_setup.transducer_input_wideband_gain_db);
                 }
             }
+
+            //Check for output lowpass cutoff command
+            else if (!strncmp(parameter_arg, SerialCommands::kLowpassOutputFreq, strlen(SerialCommands::kLowpassOutputFreq)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setOutputLowpassFc(atof(value_arg));
+                    printf("Output lowpass cutoff frequency set to: %fHz\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.output_to_transducer_lpf_cutoff_hz);
+                }
+            }
+
+            //Check for wideband gain command
+            else if (!strncmp(parameter_arg, SerialCommands::kLowpassInputFreq, strlen(SerialCommands::kLowpassInputFreq)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setInputLowpassFc(atof(value_arg));
+                    printf("Input lowpass cutoff frequency set to: %fHz\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", current_cancellation_setup.input_from_transducer_lpf_cutoff_hz);
+                }
+            }
            
         }
 
@@ -637,6 +673,18 @@ void setResonanceGain(sample_t resonance_gain_db)
     transducer_processing.setResonancePeakGainDb(resonance_gain_db);
 }
 
+void setOutputLowpassFc(sample_t cutoff_frequency_hz)
+{
+    current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = cutoff_frequency_hz;
+    transducer_processing.setOutputLpfFrequencyHz(cutoff_frequency_hz);
+}
+
+void setInputLowpassFc(sample_t cutoff_frequency_hz)
+{
+    current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = cutoff_frequency_hz;
+    transducer_processing.setInputLpfFrequencyHz(cutoff_frequency_hz);
+}
+
 void resetToDefaultParameters()
 {
     current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
@@ -647,7 +695,9 @@ void resetToDefaultParameters()
     current_cancellation_setup.transducer_input_wideband_gain_db = 0.0;
     current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
-    current_cancellation_setup.lowpass_transducer_io = false;
+    current_cancellation_setup.lowpass_transducer_io = true;
+    current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = 10000.0;
+    current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = 10000.0;
     transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
     transducer_processing.setup(current_cancellation_setup);
 
