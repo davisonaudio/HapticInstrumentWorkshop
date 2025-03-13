@@ -27,6 +27,8 @@ namespace SerialCommands
     const char* kResonantQString = "rq";
     const char* kWidebandGainString =  "wg";
     const char* kToneLevelString =  "tl";
+    const char* kLowpassOutputFreq =  "lpo";
+    const char* kLowpassInputFreq =  "lpi";
 }
 
 
@@ -48,5 +50,7 @@ void printSerialHelp()
     printf("%s <resonant_q> - Set the resonance Q factor\r\n",SerialCommands::kResonantQString);
     printf("%s <wideband_gain_db> - Set the wideband gain in db\r\n",SerialCommands::kWidebandGainString);
     printf("%s <tone_level_db> - Set the tone level in dB\r\n",SerialCommands::kToneLevelString);
+    printf("%s <lowpass_cutoff_hz> - Set the cutoff of the output lowpass filter in Hz\r\n",SerialCommands::kLowpassOutputFreq);
+    printf("%s <lowpass_cutoff_hz> - Set the cutoff of the input lowpass filter in Hz\r\n",SerialCommands::kLowpassInputFreq);
 }
 

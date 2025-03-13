@@ -32,6 +32,8 @@ public:
         sample_t inductance_filter_coefficient;
         sample_t transducer_input_wideband_gain_db;
         sample_t sample_rate_hz;
+        sample_t output_to_transducer_lpf_cutoff_hz;
+        sample_t input_from_transducer_lpf_cutoff_hz;
         AmplifierType amplifier_type;
         bool lowpass_transducer_io = true;
     };
@@ -44,6 +46,8 @@ public:
     void setInductanceFilterCoefficient(sample_t inductance_filter_coefficient);
     void setTransducerInputWidebandGainDb(sample_t transducer_input_wideband_gain_db);
     void setAdmittanceFilter();
+    void setOutputLpfFrequencyHz(sample_t lpf_freq_hz);
+    void setInputLpfFrequencyHz(sample_t lpf_freq_hz);
 
     sample_t getResonanceToneLevelDb();
 
@@ -218,13 +222,15 @@ void TransducerFeedbackCancellation::setup(Setup setup_parameters)
     //Setup lowpass filters
     m_lowpass_filters_enabled = setup_parameters.lowpass_transducer_io;
     Biquad::FilterSetup lowpass_setup;
-    lowpass_setup.cutoff_freq_hz = 500.0;
+    lowpass_setup.cutoff_freq_hz = setup_parameters.output_to_transducer_lpf_cutoff_hz;
     lowpass_setup.filter_gain_db = 0.0;
     lowpass_setup.quality_factor = 0.701;
     lowpass_setup.sample_rate_hz = setup_parameters.sample_rate_hz;
     lowpass_setup.filter_type = Biquad::FilterType::LOWPASS;
 
     m_output_to_transducer_lowpass.setup(lowpass_setup);
+
+    lowpass_setup.cutoff_freq_hz = setup_parameters.input_from_transducer_lpf_cutoff_hz;
     m_input_from_transducer_lowpass.setup(lowpass_setup);
 
     amplifier_type = setup_parameters.amplifier_type;
@@ -288,5 +294,15 @@ sample_t TransducerFeedbackCancellation::applyTransducerModelFilter(sample_t inp
         }
     }
     return output;
+}
+
+void TransducerFeedbackCancellation::setOutputLpfFrequencyHz(sample_t lpf_freq_hz)
+{
+    m_output_to_transducer_lowpass.setCutoff(lpf_freq_hz);
+}
+
+void TransducerFeedbackCancellation::setInputLpfFrequencyHz(sample_t lpf_freq_hz)
+{
+    m_input_from_transducer_lowpass.setCutoff(lpf_freq_hz);
 }
 
