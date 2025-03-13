@@ -39,7 +39,7 @@
 
 #if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 2;
+static const unsigned int VERSION_MIN = 3;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
