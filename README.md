@@ -3,6 +3,8 @@ Repository for the self-sensing vibrotactile haptic instrument design project. P
 
 For more information on using the kit and detailed documentation, visit the [wiki](https://github.com/davisonaudio/HapticInstrumentWorkshop/wiki).
 
+Access the web control panel [here](https://davisonaudio.github.io/HapticInstrumentWorkshop/) for logging information and parameter adjustment.
+
 # Kit Contents
 
 - 1x Teensy 4.0 Microcontroller development board with headers
