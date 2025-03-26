@@ -39,14 +39,14 @@
 
 #if BUILD_RELEASE
 static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 3;
+static const unsigned int VERSION_MIN = 4;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
 static const unsigned int VERSION_MIN = 255;
 #endif
 
-const char VERSION_NOTES[] = "Added MIDI control of resonant frequency and tone level.";
+const char VERSION_NOTES[] = "Minor fix to include reading of input/output LPF cutoff freqs from eeprom. Default input Fc now 1000Hz.";
 
 
 // Import generated code here to view block diagram https://www.pjrc.com/teensy/gui/
@@ -376,6 +376,8 @@ void readAndApplyEepromParameters()
     current_cancellation_setup.sample_rate_hz = AUDIO_SAMPLE_RATE_EXACT;
     current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     current_cancellation_setup.lowpass_transducer_io = true;
+    current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::OUTPUT_LPF_CUTOFF_HZ);
+    current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ);
     transducer_processing.setup(current_cancellation_setup);
 
     force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
@@ -697,7 +699,7 @@ void resetToDefaultParameters()
     current_cancellation_setup.amplifier_type = TransducerFeedbackCancellation::AmplifierType::CURRENT_DRIVE;
     current_cancellation_setup.lowpass_transducer_io = true;
     current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = 10000.0;
-    current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = 10000.0;
+    current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = 1000.0;
     transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
     transducer_processing.setup(current_cancellation_setup);
 
