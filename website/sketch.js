@@ -37,7 +37,7 @@ function setup() {
   createCanvas(1000, 1000);
   background(220);
   
-  textSize(12);
+  textSize(16);
 
   setupLoggingFile();
 
@@ -109,6 +109,9 @@ function setup() {
   recallLastSerialCommandButton = createButton("Last Command");
   recallLastSerialCommandButton.position(410, 470);
   recallLastSerialCommandButton.mousePressed(recallLastCommand);
+
+
+  let commandHelpText = text("- Start by connecting your board via USB and pressing \"Connect Serial\". Select the Teensy MIDI/Audio option and connect.\r\n- For board information (firmware version etc) enter \"info\" and press Send Serial (or enter on your keyboard).\r\n- For a list of available serial commands, enter \"help\".\r\n- The commands are case sensitive.\r\n", 10, 510);
   
   resonantFrequencySlider = new SliderWithTextbox(-1, 1, 0, 0.01, sendResonantFreq);
   
@@ -130,6 +133,14 @@ function draw() {
   } else {
     connectBtn.html('Disconnect Serial');
   }
+
+  if (keyIsPressed === true) {
+    if (keyCode === ENTER) {
+      sendSerialText();
+    }
+  }
+  
+
 }
 
 function connectBtnClick() {
@@ -169,6 +180,7 @@ function downloadLogging() {
 
 function logPrint(log_str) {
   copy(0, 0, width - 200, 500, 0, -20, width - 200, 500);
+  textSize(12);
   text(log_str, 10, 500-40);
   append(logging_strings,log_str);
 }
