@@ -179,7 +179,7 @@ function downloadLogging() {
 }
 
 function logPrint(log_str) {
-  copy(0, 0, width - 200, 500, 0, -20, width - 200, 500);
+  copy(0, 0, width - 200, 490, 0, -20, width - 200, 490);
   textSize(12);
   text(log_str, 10, 500-40);
   append(logging_strings,log_str);
