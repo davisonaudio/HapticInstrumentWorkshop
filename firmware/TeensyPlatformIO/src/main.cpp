@@ -26,7 +26,7 @@
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 9
+#define TEENSY_SERIAL_NUMBER 2
 #endif
 
 //If enabled, this initialises the parameters stored in the EEPROM to their default values.
