@@ -26,7 +26,7 @@
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
 #define WRITE_SERIAL_NUMBER_TO_FLASH 0
 #if WRITE_SERIAL_NUMBER_TO_FLASH
-#define TEENSY_SERIAL_NUMBER 2
+#define TEENSY_SERIAL_NUMBER 12
 #endif
 
 //If enabled, this initialises the parameters stored in the EEPROM to their default values.
@@ -75,6 +75,9 @@ AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
 #ifdef BOARD_VERSION_REV_B
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+
+AudioConnection          patchCord9(queue_outR_i2s, 0, i2s_quad_out, 1);
+AudioConnection          patchCord10(queue_outL_i2s, 0, i2s_quad_out, 0);
 #endif
 
 #ifdef BOARD_VERSION_REV_A
@@ -87,6 +90,7 @@ AudioConnection          patchCord7(queue_outR_usb, 0, usb_out, 1);
 AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
+bool audio_shield_connected = false;
 // GUItool: end automatically generated code
 
 IntervalTimer led_blink_timer;
@@ -166,7 +170,12 @@ void setup() {
     pinMode(2, INPUT);
 
     printf("Teensy has booted.\r\n");
-    sendSerialDetails();
+    
+
+
+    //Configure the Teensy audio shield
+    audio_shield_connected = sgtl5000_1.enable();
+    sgtl5000_1.volume(0.5);
 
     //Configure amp IC over i2c
     max98389 max;
@@ -180,8 +189,7 @@ void setup() {
     }
 
     AudioMemory(512);
-    sgtl5000_1.enable();
-    sgtl5000_1.volume(0.5);
+
 
     force_sensing.setup();
 
@@ -205,6 +213,8 @@ void setup() {
     queue_inR_usb.begin();
     queue_inL_i2s.begin();
     queue_inR_i2s.begin();
+
+    sendSerialDetails();
 }
 
 teensy_sample_t buf_inL_usb[AUDIO_BLOCK_SAMPLES];
@@ -718,4 +728,13 @@ void sendSerialDetails()
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
     printf("Current resonant frequency: %fHz\r\n",current_cancellation_setup.resonant_frequency_hz);
+    if (audio_shield_connected)
+    {
+        printf("Teensy audio shield is connected\r\n");
+    }
+    else
+    {
+        printf("Teensy audio shield not connected.\r\n");
+    }
+
 }
