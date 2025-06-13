@@ -37,6 +37,8 @@ class TeensyEeprom
             DAMPED_CALIBRATION_VALUE,
             OUTPUT_LPF_CUTOFF_HZ,
             INPUT_LPF_CUTOFF_HZ,
+            HEADPHONE_LEVEL_DB,
+            ACTUATION_LEVEL_DB,
 
             NUM_FLOAT_PARAMETERS
         };

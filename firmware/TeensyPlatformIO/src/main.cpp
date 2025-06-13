@@ -13,6 +13,7 @@
 #include "TeensyEeprom.h"
 #include "TeensySerialCommands.h"
 #include "MidiComms.h"
+#include "au_KarplusStrong.h"
 
 #define teensy_sample_t int16_t
 
@@ -20,7 +21,7 @@
 // #define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
-#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
+#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
@@ -61,11 +62,18 @@ AudioRecordQueue         queue_inR_usb;         //xy=487,179
 AudioRecordQueue         queue_inL_usb;         //xy=488,146
 AudioRecordQueue         queue_inL_i2s;         //xy=490,338
 AudioRecordQueue         queue_inR_i2s;         //xy=492,414
+AudioRecordQueue         queue_inL_audio_shield;         //xy=490,338
+AudioRecordQueue         queue_inR_audio_shield;         //xy=492,414
 
+//Output to MAX98389 amplifier queues
 AudioPlayQueue           queue_outR_i2s;         //xy=653,182
 AudioPlayQueue           queue_outL_i2s;         //xy=654,147
+//Output to USB queues
 AudioPlayQueue           queue_outR_usb;         //xy=660,410
 AudioPlayQueue           queue_outL_usb;         //xy=664,339
+//Output to teensy audio shield queues
+AudioPlayQueue           queue_outR_audio_shield;         //xy=660,410
+AudioPlayQueue           queue_outL_audio_shield;         //xy=664,339
 
 AudioConnection          patchCord1(i2s_quad_in, 2, queue_inL_i2s, 0);
 AudioConnection          patchCord2(i2s_quad_in, 3, queue_inR_i2s, 0);
@@ -76,8 +84,8 @@ AudioConnection          patchCord4(usb_in, 1, queue_inR_usb, 0);
 AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
 AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
 
-AudioConnection          patchCord9(queue_outR_i2s, 0, i2s_quad_out, 1);
-AudioConnection          patchCord10(queue_outL_i2s, 0, i2s_quad_out, 0);
+AudioConnection          patchCord9(queue_outR_audio_shield, 0, i2s_quad_out, 1);
+AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 0);
 #endif
 
 #ifdef BOARD_VERSION_REV_A
@@ -91,6 +99,11 @@ AudioConnection          patchCord8(queue_outL_usb, 0, usb_out, 0);
 
 AudioControlSGTL5000     sgtl5000_1;     //xy=527,521
 bool audio_shield_connected = false;
+sample_t headphone_level_db = 0.0;
+sample_t actuation_level_db = 0.0;
+
+AudioUtils::KarplusStrong kp_synth;
+
 // GUItool: end automatically generated code
 
 IntervalTimer led_blink_timer;
@@ -144,6 +157,8 @@ void setWidebandGain(sample_t wideband_gain_db);
 void setResonanceGain(sample_t resonance_gain_db);
 void setOutputLowpassFc(sample_t cutoff_frequency_hz);
 void setInputLowpassFc(sample_t cutoff_frequency_hz);
+void setHeadphoneLevel(sample_t level_db);
+void setActuationLevel(sample_t level_db);
 
 
 // MIDI-related functions
@@ -153,6 +168,18 @@ void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_va
 void txForceSenseVal(sample_t force_sense_val);
 
 //To reduce latency, set MAX_BUFFERS = 8 in play_queue.h and max_buffers = 8 in record_queue.h
+
+
+//Pot 1 always controls actuation level, pot 2 controls headphone level
+enum class AudioShieldMode
+{
+    DISCONNECTED = 0, //No audio shield, function as normal to/from USB audio connection
+    HEADPHONE_OUTPUT, //Actuation signal also output to headphones (without lowpass applied)
+    HP_OP_PIEZO_IP,   //Same as HEADPHONE_OUTPUT but audio input is highpassed and mixed with current return for excitation input (for additional piezo)
+    ANALOG_ONLY,      //Audio shield replaces USB connection - audio in is sent to actuation amplifier and current return send to audio out
+    STANDALONE_SYNTH  //No external synth required. Inbuilt resonant synthesis models used and output over headphones.
+};
+AudioShieldMode audio_shield_mode;
 
 void setup() {
 
@@ -171,11 +198,20 @@ void setup() {
 
     printf("Teensy has booted.\r\n");
     
-
+    kp_synth.setFrequency(161);
 
     //Configure the Teensy audio shield
     audio_shield_connected = sgtl5000_1.enable();
     sgtl5000_1.volume(0.5);
+
+    if (audio_shield_connected)
+    {
+        audio_shield_mode = AudioShieldMode::HEADPHONE_OUTPUT;
+    }
+    else
+    {
+        audio_shield_mode = AudioShieldMode::DISCONNECTED;
+    }
 
     //Configure amp IC over i2c
     max98389 max;
@@ -225,7 +261,7 @@ unsigned long total_sample_count = 0;
 
 void loop() {
 
-    int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s;
+    int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s, *bp_outL_audio_shield, *bp_outR_audio_shield;
 
     // Wait for i2s (amp) channels to have content
     while (!queue_inL_i2s.available() || !queue_inR_i2s.available());
@@ -251,6 +287,9 @@ void loop() {
     bp_outR_i2s = queue_outR_i2s.getBuffer();
     bp_outL_usb = queue_outL_usb.getBuffer();
     bp_outR_usb = queue_outR_usb.getBuffer();
+
+    bp_outL_audio_shield = queue_outL_audio_shield.getBuffer();
+    bp_outR_audio_shield = queue_outR_audio_shield.getBuffer();
 
     //Get User's volume setting
     float volume_level = usb_in.volume(); //0.0 - 1.0
@@ -279,7 +318,7 @@ void loop() {
         if (current_error_state == ErrorStates::DEBUG)
         {
             usb_out_l = amp_in_current;
-            usb_out_r = processed.input_feedback_removed;
+            usb_out_r = amp_in_voltage;//processed.input_feedback_removed;
             amp_out = usb_in_l;
         }
         else
@@ -289,11 +328,23 @@ void loop() {
             amp_out = processed.output_to_transducer;
         }
 
+        if (audio_shield_mode == AudioShieldMode::STANDALONE_SYNTH)
+        {
+            amp_out = kp_synth.process(processed.input_feedback_removed) * 5;
+            bp_outL_audio_shield[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(headphone_level_db);
+            bp_outR_audio_shield[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(headphone_level_db);
+        }
+
         // Convert from normalised float back to int16 and add into output buffers
-        bp_outL_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out);
-        bp_outR_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out);
+        bp_outL_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(actuation_level_db);
+        bp_outR_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(actuation_level_db);
         bp_outL_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_l);
         bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
+        if (audio_shield_mode == AudioShieldMode::HEADPHONE_OUTPUT)
+        { //Straight copy of incoming USB audio to headphone output
+            bp_outL_audio_shield[i] = normalisedToInt<teensy_sample_t>(usb_in_l) * dBToLin(headphone_level_db);
+            bp_outR_audio_shield[i] = normalisedToInt<teensy_sample_t>(usb_in_r) * dBToLin(headphone_level_db);
+        }
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
         if (force_sensing.valueAvailable())
@@ -306,10 +357,10 @@ void loop() {
 
     // Play output buffers. Retry until success.
     while(queue_outL_i2s.playBuffer()){
-        Serial.println("Play i2s left fail.");
+        Serial.println("Play MAX98389 left fail.");
     }
     while(queue_outR_i2s.playBuffer()){
-        Serial.println("Play i2s right fail.");
+        Serial.println("Play MAX98389 right fail.");
     }
     while(queue_outL_usb.playBuffer()){
         Serial.println("Play usb left fail.");
@@ -317,6 +368,13 @@ void loop() {
     while(queue_outR_usb.playBuffer()){
         Serial.println("Play usb right fail.");
     }
+    while(queue_outL_audio_shield.playBuffer()){
+        Serial.println("Play audio shield left fail.");
+    }
+    while(queue_outR_audio_shield.playBuffer()){
+        Serial.println("Play audio shield right fail.");
+    }
+    
 
     //Process USB Serial input (debugging)
     while (Serial.available()) {
@@ -395,6 +453,9 @@ void readAndApplyEepromParameters()
     force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
     force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
 
+    setHeadphoneLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::HEADPHONE_LEVEL_DB));
+    setActuationLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::ACTUATION_LEVEL_DB));
+
     uint8_t stored_maj_version = teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION);
     uint8_t stored_min_version = teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION);
 
@@ -416,6 +477,9 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE, force_sensing.getRawUndampedValue());
     teensy_eeprom.write(TeensyEeprom::FloatParameters::OUTPUT_LPF_CUTOFF_HZ, current_cancellation_setup.output_to_transducer_lpf_cutoff_hz);
     teensy_eeprom.write(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ, current_cancellation_setup.input_from_transducer_lpf_cutoff_hz);
+
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::HEADPHONE_LEVEL_DB, headphone_level_db);
+    teensy_eeprom.write(TeensyEeprom::FloatParameters::ACTUATION_LEVEL_DB, actuation_level_db);
 
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, force_sensing.getWindowSizePeriods());
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
@@ -449,6 +513,12 @@ void processSerialInput(char new_char)
         else if (!strncmp(parameter_arg, SerialCommands::kNormalModeString, strlen(SerialCommands::kNormalModeString)))
         {
             setErrorState(ErrorStates::NORMAL_OPERATION);
+            audio_shield_mode = AudioShieldMode::HEADPHONE_OUTPUT;
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kStandaloneSynthModeString, strlen(SerialCommands::kStandaloneSynthModeString)))
+        {
+            audio_shield_mode = AudioShieldMode::STANDALONE_SYNTH;
+            printf("Karplus strong synth enabled\r\n");
         }
         else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
         {
@@ -577,6 +647,39 @@ void processSerialInput(char new_char)
                     printf("%f\n", current_cancellation_setup.input_from_transducer_lpf_cutoff_hz);
                 }
             }
+
+            //Check for headphone level command
+            else if (!strncmp(parameter_arg, SerialCommands::kHeadphoneLevel, strlen(SerialCommands::kHeadphoneLevel)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setHeadphoneLevel(atof(value_arg));
+                    printf("Headphone level set to: %fdB\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", headphone_level_db);
+                }
+            }
+
+            //Check for actuation level command
+            else if (!strncmp(parameter_arg, SerialCommands::kActuationLevel, strlen(SerialCommands::kActuationLevel)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    setActuationLevel(atof(value_arg));
+                    printf("Actuation level set to: %fdB\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", actuation_level_db);
+                }
+            }
+
+            else //Catch unrecopnised commands
+            {
+                //printf("Command not recognised! Type \"help\" to see a list of possible commands\r\n");
+            }
            
         }
 
@@ -697,6 +800,16 @@ void setInputLowpassFc(sample_t cutoff_frequency_hz)
     transducer_processing.setInputLpfFrequencyHz(cutoff_frequency_hz);
 }
 
+void setHeadphoneLevel(sample_t level_db)
+{
+    headphone_level_db = auClamp(level_db, -200.0, 0);
+}
+
+void setActuationLevel(sample_t level_db)
+{
+    actuation_level_db = level_db; //auClamp(level_db, -200.0, 0);
+}
+
 void resetToDefaultParameters()
 {
     current_cancellation_setup.resonant_frequency_hz = RESONANT_FREQ_HZ;
@@ -715,6 +828,9 @@ void resetToDefaultParameters()
 
     force_sensing.setResonantFrequencyHz(RESONANT_FREQ_HZ);
     force_sensing.setWindowSizePeriods(10);
+
+    setHeadphoneLevel(0.0);
+    setActuationLevel(0.0);
 
     printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
 }
