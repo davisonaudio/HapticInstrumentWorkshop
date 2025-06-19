@@ -182,10 +182,6 @@ void TransducerFeedbackCancellation::setAdmittanceFilter()
     admittance_filter.biquads.push_back(temp);
 }
 
-sample_t TransducerFeedbackCancellation::getResonanceToneLevelDb()
-{
-    
-}
 
 
 void TransducerFeedbackCancellation::setup(Setup setup_parameters)
