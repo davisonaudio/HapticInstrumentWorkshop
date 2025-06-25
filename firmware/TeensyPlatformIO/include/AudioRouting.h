@@ -20,6 +20,8 @@ Date: 13/06/2025
 #define teensy_sample_t int16_t
 #define RESONANT_FREQ_HZ 89.0
 
+#define BOARD_VERSION_REV_B
+
 namespace AudioRouting {
 
 
@@ -51,8 +53,8 @@ AudioConnection          patchUsbInL(usb_in, 0, queue_inL_usb, 0);
 AudioConnection          patchUsbInR(usb_in, 1, queue_inR_usb, 0);
 
 #ifdef BOARD_VERSION_REV_B
-AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 3);
-AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 2);
+AudioConnection          patchCord5(queue_outR_max98389, 0, i2s_quad_out, 3);
+AudioConnection          patchCord6(queue_outL_max98389, 0, i2s_quad_out, 2);
 
 AudioConnection          patchCord9(queue_outR_audio_shield, 0, i2s_quad_out, 1);
 AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 0);
@@ -132,8 +134,8 @@ void initialiseAudio()
     queue_inR_usb.begin();
     queue_inL_max98389.begin();
     queue_inR_max98389.begin();
-    queue_inL_audio_shield.begin();
-    queue_inR_audio_shield.begin();
+    // queue_inL_audio_shield.begin();
+    // queue_inR_audio_shield.begin();
 }
 
 void audioRouterProcess()
@@ -213,6 +215,8 @@ void audioRouterProcess()
             amp_out = kp_synth.process(processed.input_feedback_removed) * 5;
             bp_outL_audio_shield[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(headphone_level_db);
             bp_outR_audio_shield[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(headphone_level_db);
+            usb_out_l = amp_out;
+            usb_out_r = amp_out;
         }
 
         // Convert from normalised float back to int16 and add into output buffers

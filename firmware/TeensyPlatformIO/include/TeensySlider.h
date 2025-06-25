@@ -21,8 +21,21 @@ class TeensySlider
         Wire.beginTransmission(m_i2c_address);
         Wire.write(static_cast<uint8_t>(TxType::POT));
         Wire.write(pot_number);
-        Wire.requestFrom((int)m_i2c_address, 1);
-        return Wire.read();
+        if (!Wire.endTransmission(false))
+        {
+            printf("Tx error!!\r\n");
+            return; //Error in i2c transmission
+        }
+        delayMicroseconds(900);
+        uint8_t bytes_ret = Wire.requestFrom(m_i2c_address, 1);
+        printf("Bytes returned: %d\r\n",bytes_ret);
+        uint8_t pot_val = 0;
+        delayMicroseconds(90);
+        while(Wire.available())
+        {
+            pot_val = Wire.read();
+        }
+        return pot_val;
     }
 
     uint8_t getSwitchPressCount(uint8_t switch_number)
@@ -30,6 +43,7 @@ class TeensySlider
         Wire.beginTransmission(m_i2c_address);
         Wire.write(static_cast<uint8_t>(TxType::SWITCH));
         Wire.write(switch_number);
+        Wire.endTransmission(false);
         Wire.requestFrom((int)m_i2c_address, 1);
         return Wire.read();
     }
@@ -47,6 +61,7 @@ class TeensySlider
     {
         Wire.beginTransmission(m_i2c_address);
         Wire.write(static_cast<uint8_t>(TxType::FIRMWARE_VERSION));
+        Wire.endTransmission();
         Wire.requestFrom((int)m_i2c_address, 1);
         return Wire.read();
     }

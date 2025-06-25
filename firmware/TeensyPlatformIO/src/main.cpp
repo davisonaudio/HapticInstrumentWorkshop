@@ -69,6 +69,7 @@ int input_char_index = 0;
 TeensyEeprom teensy_eeprom;
 uint8_t serial_number;
 TeensySlider teensy_slider;
+uint8_t slider_fw_version = 0;
 
 //Basic error states that can occur, used for debug prints and LED blink interval.
 enum class ErrorStates
@@ -181,7 +182,17 @@ void loop() {
 
     if (user_controls_time < (millis() - 1000))
     {
-        printf("Pot 0 value: %d \r\n",teensy_slider.readPot(0));
+
+        // printf("Pot 1 value: %d \r\n",teensy_slider.readPot(1));
+        // delayMicroseconds(300);
+        // printf("Switch 0: %d \r\n",teensy_slider.getSwitchPressCount(0));
+        // delayMicroseconds(300);
+        // static uint8_t led_num = 0;
+        // teensy_slider.setLedBrightness(led_num, 0);
+        // led_num = (led_num + 1) % 10;
+        // delayMicroseconds(300);
+        // teensy_slider.setLedBrightness(led_num, 255);
+        
         user_controls_time = millis();
     }
 }
@@ -256,6 +267,8 @@ void readAndApplyEepromParameters()
     AudioRouting::setHeadphoneLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::HEADPHONE_LEVEL_DB));
     AudioRouting::setActuationLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::ACTUATION_LEVEL_DB));
 
+    AudioRouting::setAudioShieldMode(teensy_eeprom.readAudioShieldMode());
+
     uint8_t stored_maj_version = teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION);
     uint8_t stored_min_version = teensy_eeprom.read(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION);
 
@@ -284,6 +297,7 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, AudioRouting::force_sensing.getWindowSizePeriods());
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION, VERSION_MIN);
+    teensy_eeprom.writeAudioShieldMode(AudioRouting::getAudioShieldMode());
     printCurrentTime();
     printf(" Parameters saved to EEPROM.\r\n");
 }
