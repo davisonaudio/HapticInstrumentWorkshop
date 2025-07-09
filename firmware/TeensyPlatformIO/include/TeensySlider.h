@@ -21,17 +21,15 @@ class TeensySlider
         Wire.beginTransmission(m_i2c_address);
         Wire.write(static_cast<uint8_t>(TxType::POT));
         Wire.write(pot_number);
-        if (!Wire.endTransmission(false))
+        if (Wire.endTransmission(false))
         {
             printf("Tx error!!\r\n");
-            return; //Error in i2c transmission
+            return 0; //Error in i2c transmission
         }
-        delayMicroseconds(900);
         uint8_t bytes_ret = Wire.requestFrom(m_i2c_address, 1);
         printf("Bytes returned: %d\r\n",bytes_ret);
         uint8_t pot_val = 0;
-        delayMicroseconds(90);
-        while(Wire.available())
+        if (Wire.available())
         {
             pot_val = Wire.read();
         }

@@ -36,6 +36,10 @@ namespace SerialCommands
     const char* kHeadphoneLevel = "hpl";
     const char* kActuationLevel = "al";
 
+    const char* kKarplusBlend = "kpb";
+    const char* kKarplusFreq = "kpf";
+    const char* kKarplusDamping = "kpd";
+
 }
 
 
@@ -63,5 +67,9 @@ void printSerialHelp()
     printf("%s <lowpass_cutoff_hz> - Set the cutoff of the input lowpass filter in Hz\r\n",SerialCommands::kLowpassInputFreq);
     printf("%s <headphone_level_dbFS> - Set the headphone output level in dBFS (0 = maximum)\r\n",SerialCommands::kHeadphoneLevel);
     printf("%s <actuation_level_dbFS> - Set the actuation output level in dBFS (0 = maximum)\r\n",SerialCommands::kActuationLevel);
+
+    printf("%s <karplus_strong_blend> - Set the blend (0=string, 0.5=snare, 1.0=octave gong sound\r\n",SerialCommands::kKarplusBlend);
+    printf("%s <karplus_strong_freq_hz> - Set the delay line freq in Hz\r\n",SerialCommands::kKarplusFreq);
+    printf("%s <karplus_strong_damping> - Set the damping (1.0 = undamped, 0=damped)\r\n",SerialCommands::kKarplusDamping);
 }
 

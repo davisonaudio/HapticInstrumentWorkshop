@@ -51,8 +51,6 @@ static const unsigned int VERSION_MIN = 255;
 
 const char VERSION_NOTES[] = "Minor fix to include reading of input/output LPF cutoff freqs from eeprom. Default input Fc now 1000Hz.";
 
-bool audio_shield_connected = false;
-
 
 
 
@@ -86,6 +84,7 @@ TeensyEeprom::BoardRevision board_revision;
 
 extern TransducerFeedbackCancellation::Setup AudioRouting::current_cancellation_setup;
 extern ForceSensing AudioRouting::force_sensing;
+extern AudioUtils::KarplusStrong AudioRouting::kp_synth;
 
 static const unsigned long LED_BLINK_INTERVAL_NORMAL_OPERATION              =  1000000; //1s
 static const unsigned long LED_BLINK_INTERVAL_AMP_NOT_CONFIGURED            =   500000; //500ms
@@ -184,13 +183,10 @@ void loop() {
     {
 
         // printf("Pot 1 value: %d \r\n",teensy_slider.readPot(1));
-        // delayMicroseconds(300);
         // printf("Switch 0: %d \r\n",teensy_slider.getSwitchPressCount(0));
-        // delayMicroseconds(300);
         // static uint8_t led_num = 0;
         // teensy_slider.setLedBrightness(led_num, 0);
         // led_num = (led_num + 1) % 10;
-        // delayMicroseconds(300);
         // teensy_slider.setLedBrightness(led_num, 255);
         
         user_controls_time = millis();
@@ -323,6 +319,7 @@ void processSerialInput(char new_char)
         if (!strncmp(parameter_arg, SerialCommands::kDebugModeString, strlen(SerialCommands::kDebugModeString)))
         {
             setErrorState(ErrorStates::DEBUG);
+            AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::DEBUG);
         }
         else if (!strncmp(parameter_arg, SerialCommands::kNormalModeString, strlen(SerialCommands::kNormalModeString)))
         {
@@ -333,6 +330,11 @@ void processSerialInput(char new_char)
         {
             AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::STANDALONE_SYNTH);
             printf("Karplus strong synth enabled\r\n");
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kAnalogModeString, strlen(SerialCommands::kAnalogModeString)))
+        {
+            AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::ANALOG_ONLY);
+            printf("Analog mode enabledr\n");
         }
         else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
         {
@@ -490,6 +492,46 @@ void processSerialInput(char new_char)
                 }
             }
 
+            //Check for actuation level command
+            else if (!strncmp(parameter_arg, SerialCommands::kKarplusBlend, strlen(SerialCommands::kKarplusBlend)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    AudioRouting::kp_synth.setBlend(atof(value_arg));
+                    printf("Karplus strong blend set to: %f\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", AudioRouting::kp_synth.getBlend());
+                }
+            }
+                        //Check for actuation level command
+            else if (!strncmp(parameter_arg, SerialCommands::kKarplusFreq, strlen(SerialCommands::kKarplusFreq)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    AudioRouting::kp_synth.setFrequency(atof(value_arg));
+                    printf("Karplus strong frequency set to: %fHz\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", AudioRouting::kp_synth.getFrequency());
+                }
+            }
+                        //Check for actuation level command
+            else if (!strncmp(parameter_arg, SerialCommands::kKarplusDamping, strlen(SerialCommands::kKarplusDamping)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    AudioRouting::kp_synth.setDamping(atof(value_arg));
+                    printf("Karplus strong damping set to: %f\r\n", atof(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%f\n", AudioRouting::kp_synth.getDamping());
+                }
+            }
+
             else //Catch unrecopnised commands
             {
                 //printf("Command not recognised! Type \"help\" to see a list of possible commands\r\n");
@@ -581,7 +623,7 @@ void sendSerialDetails()
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
     printf("Current resonant frequency: %fHz\r\n",AudioRouting::current_cancellation_setup.resonant_frequency_hz);
-    if (audio_shield_connected)
+    if (AudioRouting::audioShieldConnected())
     {
         printf("Teensy audio shield is connected\r\n");
     }
@@ -589,5 +631,6 @@ void sendSerialDetails()
     {
         printf("Teensy audio shield not connected.\r\n");
     }
+    printf("Max audio buffers used: %d\r\n",AudioMemoryUsageMax());
 
 }

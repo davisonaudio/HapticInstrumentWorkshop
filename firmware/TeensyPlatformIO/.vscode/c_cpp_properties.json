@@ -233,6 +233,7 @@
                 "__IMXRT1062__",
                 "ARDUINO_TEENSY40",
                 "USB_MIDI_AUDIO_SERIAL",
+                "AUDIO_BLOCK_SAMPLES=8",
                 "ARDUINO=10805",
                 "TEENSYDUINO=159",
                 "CORE_TEENSY",
