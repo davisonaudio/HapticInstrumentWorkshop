@@ -130,6 +130,8 @@ void initialiseAudio()
 
     AudioMemory(512);
 
+    int max_bufs = 2;
+
 
     //Begin audio buffer queues
     queue_inL_usb.begin();
@@ -140,7 +142,14 @@ void initialiseAudio()
     {
         queue_inL_audio_shield.begin();
         queue_inR_audio_shield.begin();
+        queue_outL_audio_shield.setMaxBuffers(max_bufs);
+        queue_outR_audio_shield.setMaxBuffers(max_bufs);
     }
+
+    queue_outR_max98389.setMaxBuffers(max_bufs);
+    queue_outL_max98389.setMaxBuffers(max_bufs);
+    queue_outR_usb.setMaxBuffers(max_bufs);
+    queue_outL_usb.setMaxBuffers(max_bufs);
 
 }
 
