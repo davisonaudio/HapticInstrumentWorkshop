@@ -16,11 +16,12 @@ Date: 13/06/2025
 #include "TransducerFeedbackCancellation.h"
 #include "au_KarplusStrong.h"
 #include "ForceSensing.h"
+#include "standardBell.h"
 
 #define teensy_sample_t int16_t
 #define RESONANT_FREQ_HZ 89.0
 
-#define BOARD_VERSION_REV_B
+#define BOARD_VERSION_REV_A
 
 namespace AudioRouting {
 
@@ -31,12 +32,16 @@ AudioInputUSB            usb_in;
 AudioOutputI2SQuad       i2s_quad_out;
 AudioOutputUSB           usb_out;
 
+standardBell             bell_synth;
+
 AudioRecordQueue         queue_inR_usb;
 AudioRecordQueue         queue_inL_usb;
 AudioRecordQueue         queue_inL_max98389;
 AudioRecordQueue         queue_inR_max98389;
 AudioRecordQueue         queue_inL_audio_shield;
 AudioRecordQueue         queue_inR_audio_shield;
+
+AudioRecordQueue         bell_output;
 
 //Output to MAX98389 amplifier queues
 AudioPlayQueue           queue_outR_max98389;
@@ -46,6 +51,9 @@ AudioPlayQueue           queue_outL_usb;
 //Output to teensy audio shield queues
 AudioPlayQueue           queue_outR_audio_shield;
 AudioPlayQueue           queue_outL_audio_shield;
+
+AudioPlayQueue           bell_input;
+
 
 AudioConnection          patchAmpInL(i2s_quad_in, 2, queue_inL_max98389, 0);
 AudioConnection          patchAmpInR(i2s_quad_in, 3, queue_inR_max98389, 0);
@@ -62,6 +70,11 @@ AudioConnection          patchCord6(queue_outL_max98389, 0, i2s_quad_out, 2);
 
 AudioConnection          patchCord9(queue_outR_audio_shield, 0, i2s_quad_out, 1);
 AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 0);
+
+AudioConnection          inToBell(bell_input, 0, bell_synth, 0);
+AudioConnection          outFromBell(bell_synth, 0, bell_output, 0);
+// AudioConnection          inToBell(bell_input, 0, bell_output, 0);
+
 #endif
 
 #ifdef BOARD_VERSION_REV_A
@@ -138,6 +151,7 @@ void initialiseAudio()
     queue_inR_usb.begin();
     queue_inL_max98389.begin();
     queue_inR_max98389.begin();
+    bell_output.begin();
     if (audio_shield_connected)
     {
         queue_inL_audio_shield.begin();
@@ -150,7 +164,7 @@ void initialiseAudio()
     queue_outL_max98389.setMaxBuffers(max_bufs);
     queue_outR_usb.setMaxBuffers(max_bufs);
     queue_outL_usb.setMaxBuffers(max_bufs);
-
+    bell_input.setMaxBuffers(max_bufs);
 }
 
 
@@ -159,6 +173,8 @@ teensy_sample_t amp_in_current_b[AUDIO_BLOCK_SAMPLES];
 teensy_sample_t actuation_input_l_b[AUDIO_BLOCK_SAMPLES];
 teensy_sample_t actuation_input_r_b[AUDIO_BLOCK_SAMPLES];
 teensy_sample_t piezo_input_b[AUDIO_BLOCK_SAMPLES];
+
+teensy_sample_t bell_output_b[AUDIO_BLOCK_SAMPLES];
 
 void routeInputBuffers()
 {
@@ -176,6 +192,7 @@ void routeInputBuffers()
             // queue_inR_audio_shield.freeBuffer();
             break;
         case AudioShieldMode::STANDALONE_SYNTH:
+            memcpy(bell_output_b, bell_output.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
             break;
         case AudioShieldMode::DEBUG:
         case AudioShieldMode::DISCONNECTED:
@@ -202,6 +219,7 @@ void routeInputBuffers()
     queue_inR_audio_shield.freeBuffer();
     queue_inL_usb.freeBuffer();
     queue_inR_usb.freeBuffer();
+    bell_output.freeBuffer();
 
     
 }
@@ -215,7 +233,7 @@ void audioRouterProcess()
 
     routeInputBuffers();
 
-    int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s, *bp_outL_audio_shield, *bp_outR_audio_shield;
+    int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s, *bp_outL_audio_shield, *bp_outR_audio_shield, *bp_bell_input;
 
     // Get pointers to "empty" output buffers
     bp_outL_i2s = queue_outL_max98389.getBuffer();
@@ -225,6 +243,8 @@ void audioRouterProcess()
 
     bp_outL_audio_shield = queue_outL_audio_shield.getBuffer();
     bp_outR_audio_shield = queue_outR_audio_shield.getBuffer();
+
+    bp_bell_input = bell_input.getBuffer();
 
     
 
@@ -236,6 +256,8 @@ void audioRouterProcess()
         sample_t actuation_input_r = intToNormalised<teensy_sample_t>(actuation_input_r_b[i]);
         sample_t amp_in_voltage = intToNormalised<teensy_sample_t>(amp_in_voltage_b[i]);
         sample_t amp_in_current = intToNormalised<teensy_sample_t>(amp_in_current_b[i]);
+
+        sample_t bell_output_sample = intToNormalised<teensy_sample_t>(bell_output_b[i]);
 
         static sample_t prev_synth_output_sample;
 
@@ -275,7 +297,9 @@ void audioRouterProcess()
         case AudioShieldMode::STANDALONE_SYNTH:
             audio_shield_out_l = prev_synth_output_sample;
             audio_shield_out_r = prev_synth_output_sample;
-            prev_synth_output_sample = kp_synth.process(processed.input_feedback_removed);
+            prev_synth_output_sample = bell_output_sample;
+            // prev_synth_output_sample = 0;
+            //prev_synth_output_sample = kp_synth.process(processed.input_feedback_removed);
             amp_out = processed.output_to_transducer;
             break;
         case AudioShieldMode::DEBUG:
@@ -304,6 +328,7 @@ void audioRouterProcess()
         bp_outR_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(actuation_level_db);
         bp_outL_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_l);
         bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
+        bp_bell_input[i] =  normalisedToInt<teensy_sample_t>(processed.input_feedback_removed);
 
         force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
 
@@ -328,6 +353,10 @@ void audioRouterProcess()
     while(queue_outR_audio_shield.playBuffer()){
         Serial.println("Play audio shield right fail.");
     }
+    while(bell_input.playBuffer()){
+        Serial.println("Play bell fail.");
+    }
+
 }
 
 void setResonantFrequency(sample_t resonant_frequency_hz)

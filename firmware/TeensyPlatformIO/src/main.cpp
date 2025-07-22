@@ -20,8 +20,8 @@
 
 
 //Board revision definitions (only define one):
-// #define BOARD_VERSION_REV_A
-#define BOARD_VERSION_REV_B
+#define BOARD_VERSION_REV_A
+// #define BOARD_VERSION_REV_B
 
 #define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
 
