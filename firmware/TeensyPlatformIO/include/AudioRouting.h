@@ -61,8 +61,10 @@ AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 0
 #endif
 
 #ifdef BOARD_VERSION_REV_A
-AudioConnection          patchCord5(queue_outR_i2s, 0, i2s_quad_out, 1);
-AudioConnection          patchCord6(queue_outL_i2s, 0, i2s_quad_out, 0);
+AudioConnection          patchCord5(queue_outR_max98389, 0, i2s_quad_out, 1);
+AudioConnection          patchCord6(queue_outL_max98389, 0, i2s_quad_out, 0);
+AudioConnection          patchCord9(queue_outR_audio_shield, 0, i2s_quad_out, 3);
+AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 2);
 #endif
 
 
@@ -95,12 +97,14 @@ enum class AudioShieldMode
     DEBUG
 };
 AudioShieldMode audio_shield_mode;
+bool audio_shield_connected = false;
+bool max_amp_configured = false;
 
 
 void initialiseAudio()
 {
         //Configure the Teensy audio shield
-    bool audio_shield_connected = audio_shield.enable();
+    audio_shield_connected = audio_shield.enable();
     audio_shield.volume(1.0);
 
     if (audio_shield_connected)
@@ -116,8 +120,8 @@ void initialiseAudio()
     max98389 max;
     max.begin(400 * 1000U);
     // Check that we can see the sensor and configure it.
-    bool configured = max.configure();
-    if (configured) {
+    max_amp_configured = max.configure();
+    if (max_amp_configured) {
         Serial.println("Amplifer chip successfully configured");
     } else {
         Serial.println("Error! Amplifier chip not successfully configured.");
@@ -126,7 +130,7 @@ void initialiseAudio()
     force_sensing.setup();
     kp_synth.setFrequency(161);
 
-    AudioMemory(512);
+    AudioMemory(32);
 
 
     //Begin audio buffer queues
@@ -230,8 +234,8 @@ void audioRouterProcess()
             bp_outR_audio_shield[i] = normalisedToInt<teensy_sample_t>(usb_in_r) * dBToLin(headphone_level_db);
         }
 
-        force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
-
+        // force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
+        force_sensing.process(amp_in_voltage, amp_in_current);
     }
 
     // Play output buffers. Retry until success.
@@ -257,10 +261,11 @@ void audioRouterProcess()
 
 void setResonantFrequency(sample_t resonant_frequency_hz)
 {
-    current_cancellation_setup.resonant_frequency_hz = resonant_frequency_hz;
-    force_sensing.setResonantFrequencyHz(resonant_frequency_hz);
-    transducer_processing.setResonantFrequencyHz(resonant_frequency_hz);
-    transducer_processing.setOscillatorFrequencyHz(resonant_frequency_hz);
+    sample_t rounded_freq = force_sensing.setResonantFrequencyHz(resonant_frequency_hz);
+    current_cancellation_setup.resonant_frequency_hz = rounded_freq;
+    
+    transducer_processing.setResonantFrequencyHz(rounded_freq);
+    transducer_processing.setOscillatorFrequencyHz(rounded_freq);
 }
 
 void setToneLevel(sample_t tone_level_db)
@@ -343,6 +348,16 @@ void resetToDefaultParameters()
     setActuationLevel(0.0);
 
     printf("Reset parameters to defaults. Resonant frequency now %f\r\n",current_cancellation_setup.resonant_frequency_hz);
+}
+
+bool audioShieldConnected()
+{
+    return audio_shield_connected;
+}
+
+bool maxAmpConfigured()
+{
+    return max_amp_configured;
 }
 
 

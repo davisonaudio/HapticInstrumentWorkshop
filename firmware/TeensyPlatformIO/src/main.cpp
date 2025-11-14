@@ -20,7 +20,7 @@
 
 
 //Board revision definitions (only define one):
-// #define BOARD_VERSION_REV_A
+//#define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
 #define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
@@ -50,8 +50,6 @@ static const unsigned int VERSION_MIN = 255;
 #endif
 
 const char VERSION_NOTES[] = "Minor fix to include reading of input/output LPF cutoff freqs from eeprom. Default input Fc now 1000Hz.";
-
-bool audio_shield_connected = false;
 
 
 
@@ -169,6 +167,7 @@ void loop() {
     if (AudioRouting::force_sensing.valueAvailable())
     {
         txForceSenseVal(AudioRouting::force_sensing.getDamping());
+        //printf("Force sense: %f\r\n",AudioRouting::force_sensing.getDamping());
     }
 
     //Process USB Serial input (debugging)
@@ -226,6 +225,7 @@ void setErrorState(ErrorStates error_state)
     case ErrorStates::DEBUG:
         printf(" Entered debug mode.\r\n");
         led_blink_timer.update(LED_BLINK_INTERVAL_DEBUG);
+        AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::DEBUG);
         break;
     
     default:
@@ -246,7 +246,13 @@ void printCurrentTime()
 
 void readAndApplyEepromParameters()
 {
-    AudioRouting::current_cancellation_setup.resonant_frequency_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ);
+
+    sample_t rounded_freq = AudioRouting::force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
+    AudioRouting::force_sensing.setWindowSizePeriods(teensy_eeprom.read(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH));
+    AudioRouting::force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
+    AudioRouting::force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
+
+    AudioRouting::current_cancellation_setup.resonant_frequency_hz = rounded_freq;
     AudioRouting::current_cancellation_setup.resonance_peak_gain_db = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_GAIN_DB);
     AudioRouting::current_cancellation_setup.resonance_q = teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_Q);
     AudioRouting::current_cancellation_setup.resonance_tone_level_db =  teensy_eeprom.read(TeensyEeprom::FloatParameters::TONE_LEVEL_DB);
@@ -259,10 +265,7 @@ void readAndApplyEepromParameters()
     AudioRouting::current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ);
     AudioRouting::transducer_processing.setup(AudioRouting::current_cancellation_setup);
 
-    AudioRouting::force_sensing.setResonantFrequencyHz(teensy_eeprom.read(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ));
-    AudioRouting::force_sensing.setWindowSizePeriods(teensy_eeprom.read(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH));
-    AudioRouting::force_sensing.setRawDampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::DAMPED_CALIBRATION_VALUE));
-    AudioRouting::force_sensing.setRawUndampedValue(teensy_eeprom.read(TeensyEeprom::FloatParameters::UNDAMPED_CALIBRATION_VALUE));
+
 
     AudioRouting::setHeadphoneLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::HEADPHONE_LEVEL_DB));
     AudioRouting::setActuationLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::ACTUATION_LEVEL_DB));
@@ -581,7 +584,7 @@ void sendSerialDetails()
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
     printf("Current resonant frequency: %fHz\r\n",AudioRouting::current_cancellation_setup.resonant_frequency_hz);
-    if (audio_shield_connected)
+    if (AudioRouting::audioShieldConnected())
     {
         printf("Teensy audio shield is connected\r\n");
     }
@@ -589,5 +592,12 @@ void sendSerialDetails()
     {
         printf("Teensy audio shield not connected.\r\n");
     }
-
+    if (AudioRouting::maxAmpConfigured())
+    {
+        printf("MAX98389 is configured\r\n");
+    }
+    else
+    {
+        printf("MAX98389 is NOT configured. Error in setup!.\r\n");
+    }
 }
