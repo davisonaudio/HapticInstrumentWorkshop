@@ -15,6 +15,9 @@ namespace SerialCommands
 {
     const char* kNormalModeString = "normal";
     const char* kDebugModeString = "debug";
+    const char* kAnalogModeString = "analog";
+    const char* kStandaloneSynthModeString = "synth";
+
     const char* kSaveToEepromString = "save";
     const char* kResetParametersString = "reset_params";
     const char* kHelpString = "help";
@@ -29,6 +32,10 @@ namespace SerialCommands
     const char* kToneLevelString =  "tl";
     const char* kLowpassOutputFreq =  "lpo";
     const char* kLowpassInputFreq =  "lpi";
+
+    const char* kHeadphoneLevel = "hpl";
+    const char* kActuationLevel = "al";
+
 }
 
 
@@ -38,12 +45,14 @@ void printSerialHelp()
     printf("For commands with value arguments, sending them without an argument will result in the current value being returned.\r\n");
     printf("%s - Enter normal mode (exit any current error/debug state)\r\n",SerialCommands::kNormalModeString);
     printf("%s - Enter debug mode (changes audio routing, enables additional serial printing)\r\n",SerialCommands::kDebugModeString);
+    printf("%s - Enter analog mode - routes audio from the audio shield instead of USB for connecting to external analog synths\r\n",SerialCommands::kAnalogModeString);
+    printf("%s - Enter standalone synth mode - uses internal synth of sound generation rather than USB connection\r\n",SerialCommands::kStandaloneSynthModeString);
     printf("%s - Save current parameters to EEPROM\r\n",SerialCommands::kSaveToEepromString);
     printf("%s - Reset parameters to factory defaults\r\n",SerialCommands::kResetParametersString);
     printf("%s - Display help message (this message currently displayed)\r\n",SerialCommands::kHelpString);
     printf("%s - Calibrate the damped force sense level\r\n",SerialCommands::kCalibrateDamped);
     printf("%s - Calibrate the undamped force sense level\r\n",SerialCommands::kCalibrateUndamped);
-    printf("%s - Print system information (firmware version etc.)\r\n",SerialCommands::kInfoString);
+    printf("%s - Print system information (firmware version etc.)\r\n\n",SerialCommands::kInfoString);
     
     printf("%s <resonant_frequency_hz> - Set the resonant frequency in Hz\r\n",SerialCommands::kResonantFreqString);
     printf("%s <resonant_gain_db> - Set the resonance gain in dB\r\n",SerialCommands::kResonantGainString);
@@ -52,5 +61,7 @@ void printSerialHelp()
     printf("%s <tone_level_db> - Set the tone level in dB\r\n",SerialCommands::kToneLevelString);
     printf("%s <lowpass_cutoff_hz> - Set the cutoff of the output lowpass filter in Hz\r\n",SerialCommands::kLowpassOutputFreq);
     printf("%s <lowpass_cutoff_hz> - Set the cutoff of the input lowpass filter in Hz\r\n",SerialCommands::kLowpassInputFreq);
+    printf("%s <headphone_level_dbFS> - Set the headphone output level in dBFS (0 = maximum)\r\n",SerialCommands::kHeadphoneLevel);
+    printf("%s <actuation_level_dbFS> - Set the actuation output level in dBFS (0 = maximum)\r\n",SerialCommands::kActuationLevel);
 }
 

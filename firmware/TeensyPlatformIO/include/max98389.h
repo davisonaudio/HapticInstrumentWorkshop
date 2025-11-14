@@ -1,5 +1,8 @@
+#pragma once
+
 #include <Arduino.h>
 #include <i2c_device.h>
+
 
 class max98389 {
 public:

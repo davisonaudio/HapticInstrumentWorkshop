@@ -18,7 +18,8 @@ class ForceSensing
 public:
 
     void setup();
-    void setResonantFrequencyHz(sample_t resonant_freq_hz);
+    //Returns actual freq value (due to integer rounding)
+    sample_t setResonantFrequencyHz(sample_t resonant_freq_hz);
     void setWindowSizePeriods(int window_size_periods);
 
     bool valueAvailable();
@@ -105,12 +106,13 @@ void ForceSensing::setup()
     reset();
 }
 
-void ForceSensing::setResonantFrequencyHz(sample_t resonant_freq_hz)
+sample_t ForceSensing::setResonantFrequencyHz(sample_t resonant_freq_hz)
 {
-    m_actuation_signal_goertzel.setTargetFrequencyHz(resonant_freq_hz);
+    sample_t actual_freq = m_actuation_signal_goertzel.setTargetFrequencyHz(resonant_freq_hz);
     m_sensed_signal_goertzel.setTargetFrequencyHz(resonant_freq_hz);
 
     reset();
+    return actual_freq;
 }
 
 void ForceSensing::setWindowSizePeriods(int window_size_periods)
@@ -142,6 +144,9 @@ void ForceSensing::process(sample_t actuation_sample, sample_t sensed_sample)
         {
             printf("Raw force sense vals: actuation: %f, sense: %f \r\n",m_actuation_signal_goertzel.getLastMagnitude(), m_sensed_signal_goertzel.getLastMagnitude());
         }
+
+        // printf("Actuate: %f, Sense: %f, Diff: %f\r\n", m_actuation_signal_goertzel.getLastPhase(), m_sensed_signal_goertzel.getLastPhase(), m_actuation_signal_goertzel.getLastPhase() -  m_sensed_signal_goertzel.getLastPhase());
+        //  printf("Actuate:\r\n");
     }
 }
 
