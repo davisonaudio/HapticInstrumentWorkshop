@@ -1,5 +1,21 @@
+# HaptiCoupler System
+
+This repository contaisn the design files and firmware for the HaptiCoupler system.
+It also contains information for the Haptic instrument study that used the HaptiCoupler system to explore digital musical instrument designs.
+
+More information about the system can be found in the Wiki tab of this repo.
+
+The HaptiCoupler is a device that enables simultaneous tactile sensing and haptic feedback through a signle voice coil transducer.
+
+This is achieved by actuating the voice coil with a voltage and sensing with current, along with some DSP running on the Teensy 4.0 to cancel the actuation signal from the sensing signal.
+
+It is designed primarily for use with audio-driven digital resonator instruments, though can be used for other purposes.
+
+
+
+
 # HapticInstrumentWorkshop
-Repository for the self-sensing vibrotactile haptic instrument design project. Part of the Augmented Instruments Lab at Imperial College London
+Information for the self-sensing vibrotactile haptic instrument design project. Part of the Augmented Instruments Lab at Imperial College London
 
 For more information on using the kit and detailed documentation, visit the [wiki](https://github.com/davisonaudio/HapticInstrumentWorkshop/wiki).
 
