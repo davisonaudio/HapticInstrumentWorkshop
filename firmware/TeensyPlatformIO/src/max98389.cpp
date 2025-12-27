@@ -26,7 +26,7 @@ bool max98389::configure(){
         report_error("ERROR: Failed to write PCM Clock.");
         return false;
     }
-    if(!amp.write(pcm_sample_rate_register, (uint8_t) 0x47, false)){
+    if(!amp.write(pcm_sample_rate_register, (uint8_t) 0x77, false)){
         report_error("ERROR: Failed to write PCM Sample Rate.");
         return false;
     }
