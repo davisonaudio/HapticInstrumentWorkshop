@@ -162,8 +162,6 @@ unsigned long user_controls_time = 0;
 
 void loop() {
 
-    AudioRouting::audioRouterProcess();
-
     if (AudioRouting::force_sensing.valueAvailable())
     {
         txForceSenseVal(AudioRouting::force_sensing.getDamping());
@@ -336,6 +334,11 @@ void processSerialInput(char new_char)
         {
             AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::STANDALONE_SYNTH);
             printf("Karplus strong synth enabled\r\n");
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kLoopbackTestModeString, strlen(SerialCommands::kLoopbackTestModeString)))
+        {
+            AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::LOOPBACK_TEST);
+            printf("Loopback Test mode enabled\r\n");
         }
         else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
         {

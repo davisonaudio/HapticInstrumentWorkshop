@@ -17,6 +17,7 @@ namespace SerialCommands
     const char* kDebugModeString = "debug";
     const char* kAnalogModeString = "analog";
     const char* kStandaloneSynthModeString = "synth";
+    const char* kLoopbackTestModeString = "loopback";
 
     const char* kSaveToEepromString = "save";
     const char* kResetParametersString = "reset_params";
@@ -47,6 +48,7 @@ void printSerialHelp()
     printf("%s - Enter debug mode (changes audio routing, enables additional serial printing)\r\n",SerialCommands::kDebugModeString);
     printf("%s - Enter analog mode - routes audio from the audio shield instead of USB for connecting to external analog synths\r\n",SerialCommands::kAnalogModeString);
     printf("%s - Enter standalone synth mode - uses internal synth of sound generation rather than USB connection\r\n",SerialCommands::kStandaloneSynthModeString);
+    printf("%s - Enter loopback test mode (loops USB ins to USB outs and Analog Ins to Analog Outs)\r\n",SerialCommands::kLoopbackTestModeString);
     printf("%s - Save current parameters to EEPROM\r\n",SerialCommands::kSaveToEepromString);
     printf("%s - Reset parameters to factory defaults\r\n",SerialCommands::kResetParametersString);
     printf("%s - Display help message (this message currently displayed)\r\n",SerialCommands::kHelpString);
