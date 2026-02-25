@@ -340,6 +340,11 @@ void processSerialInput(char new_char)
             AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::LOOPBACK_TEST);
             printf("Loopback Test mode enabled\r\n");
         }
+        else if (!strncmp(parameter_arg, SerialCommands::kPiezoModeString, strlen(SerialCommands::kPiezoModeString)))
+        {
+            AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::HP_OP_PIEZO_IP);
+            printf("Piezo mode enabled\r\n");
+        }
         else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
         {
             AudioRouting::resetToDefaultParameters();

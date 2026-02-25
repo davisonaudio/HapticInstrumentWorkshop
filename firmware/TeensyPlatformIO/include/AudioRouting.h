@@ -162,7 +162,7 @@ public:
                     analog_out_l = usb_in_l;
                     analog_out_r = usb_in_r;
                     usb_out_l = processed.input_feedback_removed;
-                    usb_out_r = processed.input_feedback_removed;
+                    usb_out_r = analog_in_l; //Test with dry signal from analog in
                     amp_out = processed.output_to_transducer;
                 break;
 
@@ -285,8 +285,8 @@ void initialiseAudio()
 
     AudioMemory(128);
 
-    audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 2);
-    audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 3);
+    audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 3);
+    audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 2);
     audio_router.connectInput(AudioRouter::RouterInputs::USB_L, usb_in, 0);
     audio_router.connectInput(AudioRouter::RouterInputs::USB_R, usb_in, 1);
     audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_L, i2s_quad_in, 0);
@@ -365,6 +365,11 @@ sample_t getActuationLevel(){return actuation_level_db;}
 void setAudioShieldMode(AudioShieldMode mode)
 {
     audio_shield_mode = mode;
+    if (mode == AudioShieldMode::HP_OP_PIEZO_IP)
+    {
+        audio_shield.inputSelect(AUDIO_INPUT_LINEIN);
+        //audio_shield.micGain(63);
+    }
 }
 AudioShieldMode getAudioShieldMode(){return audio_shield_mode;}
 
