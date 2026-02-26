@@ -405,6 +405,16 @@ void setActuationLevel(sample_t level_db)
     actuation_level_db = level_db; //auClamp(level_db, -200.0, 0);
 }
 
+void setKarplusFreq(sample_t kp_freq_hz)
+{
+    kp_synth.setFrequency(kp_freq_hz);
+}
+
+void setKarplusBlend(sample_t kp_blend)
+{
+    kp_synth.setBlend(kp_blend);
+}
+
 void setBoardRevision(BoardRevision board_revision)
 {
     board_rev = board_revision;

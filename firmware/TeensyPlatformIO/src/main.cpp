@@ -583,6 +583,18 @@ void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_va
             }
             AudioRouting::transducer_processing.setResonanceToneLevelDb( (sample_t) control_value - 127.0);
             break;
+        case MidiComms::ControlChangeTypes::ACTUATION_LEVEL:
+            AudioRouting::setActuationLevel((float) control_value - 127.0);
+            break;
+        case MidiComms::ControlChangeTypes::HEADPHONE_LEVEL:
+            AudioRouting::setHeadphoneLevel((float) control_value - 127.0);
+            break;
+        case MidiComms::ControlChangeTypes::KP_BLEND:
+            AudioRouting::setKarplusBlend((float) control_value / 127.0);
+            break;
+        case MidiComms::ControlChangeTypes::KP_FREQ:
+            AudioRouting::setKarplusFreq((float) (control_value + 20) * 10);
+            break;
         default:
             printf("Unknown MIDI control change (%d) received\r\n", control_number);
             break;
