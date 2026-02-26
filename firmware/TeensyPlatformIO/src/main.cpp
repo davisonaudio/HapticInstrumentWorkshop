@@ -23,6 +23,8 @@
 //#define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
+
+
 #define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
@@ -80,7 +82,6 @@ enum class ErrorStates
 };
 
 ErrorStates current_error_state;
-TeensyEeprom::BoardRevision board_revision;
 
 extern TransducerFeedbackCancellation::Setup AudioRouting::current_cancellation_setup;
 extern ForceSensing AudioRouting::force_sensing;
@@ -153,6 +154,8 @@ void setup() {
     usbMIDI.setHandleControlChange(rxControlChange);
 
     sendSerialDetails();
+
+    
 }
 
 
@@ -263,6 +266,8 @@ void readAndApplyEepromParameters()
     AudioRouting::current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ);
     AudioRouting::transducer_processing.setup(AudioRouting::current_cancellation_setup);
 
+    AudioRouting::setBoardRevision(teensy_eeprom.readBoardRevision());
+
 
 
     AudioRouting::setHeadphoneLevel(teensy_eeprom.read(TeensyEeprom::FloatParameters::HEADPHONE_LEVEL_DB));
@@ -298,6 +303,7 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, AudioRouting::force_sensing.getWindowSizePeriods());
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION, VERSION_MIN);
+    teensy_eeprom.writeBoardRevision(AudioRouting::BoardRevision::REV_B);
     teensy_eeprom.writeAudioShieldMode(AudioRouting::getAudioShieldMode());
     printCurrentTime();
     printf(" Parameters saved to EEPROM.\r\n");
@@ -501,6 +507,20 @@ void processSerialInput(char new_char)
                 }
             }
 
+            //Check for PCB revision
+            else if (!strncmp(parameter_arg, SerialCommands::kRevisionString, strlen(SerialCommands::kRevisionString)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    AudioRouting::setBoardRevision(static_cast<AudioRouting::BoardRevision>(atoi(value_arg)));
+                    printf("PCB revision set to: %d (0 = A, 1 = B). Don't forget to save to EEPROM!\r\n", atoi(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%d\n", static_cast<int>(AudioRouting::getBoardRevision()));
+                }
+            }
+
             else //Catch unrecopnised commands
             {
                 //printf("Command not recognised! Type \"help\" to see a list of possible commands\r\n");
@@ -592,6 +612,19 @@ void sendSerialDetails()
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
     printf("Current resonant frequency: %fHz\r\n",AudioRouting::current_cancellation_setup.resonant_frequency_hz);
+
+    if (AudioRouting::getBoardRevision() == AudioRouting::BoardRevision::REV_A)
+    {
+        printf("Board version: Rev. A\r\n");
+    }
+    else if (AudioRouting::getBoardRevision() == AudioRouting::BoardRevision::REV_B)
+    {
+        printf("Board version: Rev. B\r\n");
+    }
+    else
+    {
+        printf("Unknown board version! (flash value: %d)\r\n",static_cast<int>(AudioRouting::getBoardRevision()));
+    }
     if (AudioRouting::audioShieldConnected())
     {
         printf("Teensy audio shield is connected\r\n");

@@ -101,7 +101,7 @@ void ForceSensing::setup()
     m_actuation_signal_goertzel.setup(setup_parameters);
     m_sensed_signal_goertzel.setup(setup_parameters);
 
-    m_force_sense_averaging.setB1(-0.8);
+    m_force_sense_averaging.setB1(-0.7);
 
     reset();
 }

@@ -57,6 +57,13 @@ AudioShieldMode audio_shield_mode;
 bool audio_shield_connected = false;
 bool max_amp_configured = false;
 
+enum class BoardRevision
+{ //Amplifier PCB revision (affects i2s pin assignment)
+    REV_A = 0,
+    REV_B
+};
+BoardRevision board_rev = BoardRevision::REV_B;
+
 
 class AudioRouter : public AudioStream
 {
@@ -217,6 +224,22 @@ public:
             m_output_connections[static_cast<int>(output_route)].connect(*this, static_cast<int>(output_route), destination_object, destination_channel);
         }
 
+        void disconnectInputs()
+        {
+            for (int i = 0 ; i < NUM_INPUTS ; i++)
+            {
+                m_input_connections[i].disconnect();
+            }
+        }
+
+        void disconnectOutputs()
+        {
+            for (int i = 0 ; i < NUM_OUTPUTS ; i++)
+            {
+                m_output_connections[i].disconnect();
+            }
+        }
+
 private:
         audio_block_t *inputQueueArray[NUM_INPUTS];
         audio_block_t *current_input_queues[NUM_INPUTS];
@@ -254,6 +277,42 @@ private:
 
 AudioRouter audio_router;
 
+
+
+void makeAudioConnections()
+{
+    audio_router.disconnectInputs();
+    audio_router.disconnectOutputs();
+
+    if (board_rev == BoardRevision::REV_A)
+    {
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 1);
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 0);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_L, i2s_quad_in, 2);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_R, i2s_quad_in, 3);
+
+        audio_router.connectOutput(AudioRouter::RouterOutputs::AMP, i2s_quad_out, 0);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_L, i2s_quad_out, 2);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_R, i2s_quad_out, 3);   
+    }
+    else if (board_rev == BoardRevision::REV_B)
+    {
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 3);
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 2);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_L, i2s_quad_in, 0);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_R, i2s_quad_in, 1);
+
+        audio_router.connectOutput(AudioRouter::RouterOutputs::AMP, i2s_quad_out, 2);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_L, i2s_quad_out, 0);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_R, i2s_quad_out, 1);
+    }
+    audio_router.connectInput(AudioRouter::RouterInputs::USB_L, usb_in, 0);
+    audio_router.connectInput(AudioRouter::RouterInputs::USB_R, usb_in, 1);
+
+    audio_router.connectOutput(AudioRouter::RouterOutputs::USB_L, usb_out, 0);
+    audio_router.connectOutput(AudioRouter::RouterOutputs::USB_R, usb_out, 1);
+}
+
 void initialiseAudio()
 {
         //Configure the Teensy audio shield
@@ -285,19 +344,7 @@ void initialiseAudio()
 
     AudioMemory(128);
 
-    audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 3);
-    audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 2);
-    audio_router.connectInput(AudioRouter::RouterInputs::USB_L, usb_in, 0);
-    audio_router.connectInput(AudioRouter::RouterInputs::USB_R, usb_in, 1);
-    audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_L, i2s_quad_in, 0);
-    audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_R, i2s_quad_in, 1);
-
-    audio_router.connectOutput(AudioRouter::RouterOutputs::AMP, i2s_quad_out, 2);
-    audio_router.connectOutput(AudioRouter::RouterOutputs::USB_L, usb_out, 0);
-    audio_router.connectOutput(AudioRouter::RouterOutputs::USB_R, usb_out, 1);
-    audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_L, i2s_quad_out, 0);
-    audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_R, i2s_quad_out, 1);
-
+    //makeAudioConnections();
 
 }
 
@@ -357,6 +404,14 @@ void setActuationLevel(sample_t level_db)
 {
     actuation_level_db = level_db; //auClamp(level_db, -200.0, 0);
 }
+
+void setBoardRevision(BoardRevision board_revision)
+{
+    board_rev = board_revision;
+    makeAudioConnections();
+}
+
+BoardRevision getBoardRevision(){return board_rev;}
 
 sample_t getHeadphoneLevel(){return headphone_level_db;}
 
