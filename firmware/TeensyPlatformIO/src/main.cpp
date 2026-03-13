@@ -155,6 +155,8 @@ void setup() {
 
     sendSerialDetails();
 
+    Wire1.begin();
+
     
 }
 
@@ -183,15 +185,12 @@ void loop() {
     if (user_controls_time < (millis() - 1000))
     {
 
-        // printf("Pot 1 value: %d \r\n",teensy_slider.readPot(1));
-        // delayMicroseconds(300);
-        // printf("Switch 0: %d \r\n",teensy_slider.getSwitchPressCount(0));
-        // delayMicroseconds(300);
-        // static uint8_t led_num = 0;
-        // teensy_slider.setLedBrightness(led_num, 0);
-        // led_num = (led_num + 1) % 10;
-        // delayMicroseconds(300);
-        // teensy_slider.setLedBrightness(led_num, 255);
+        printf("Pot 1 value: %d \r\n",teensy_slider.readPot(1));
+        printf("Switch 0: %d \r\n",teensy_slider.getSwitchPressCount(0));
+        static uint8_t led_num = 0;
+        teensy_slider.setLedBrightness(led_num, 0);
+        led_num = (led_num + 1) % 10;
+        teensy_slider.setLedBrightness(led_num, 255);
         
         user_controls_time = millis();
     }
