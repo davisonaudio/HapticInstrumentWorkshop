@@ -35,6 +35,7 @@ namespace SerialCommands
     const char* kToneLevelString =  "tl";
     const char* kLowpassOutputFreq =  "lpo";
     const char* kLowpassInputFreq =  "lpi";
+    const char* kInductanceCoefficients =  "inductance";
 
     const char* kHeadphoneLevel = "hpl";
     const char* kActuationLevel = "al";
@@ -68,7 +69,10 @@ void printSerialHelp()
     printf("%s <tone_level_db> - Set the tone level in dB\r\n",SerialCommands::kToneLevelString);
     printf("%s <lowpass_cutoff_hz> - Set the cutoff of the output lowpass filter in Hz\r\n",SerialCommands::kLowpassOutputFreq);
     printf("%s <lowpass_cutoff_hz> - Set the cutoff of the input lowpass filter in Hz\r\n",SerialCommands::kLowpassInputFreq);
+    printf("%s <a0> <a1> <a2> <b1> <b2> - Set the inductance biquad coefficients\r\n",SerialCommands::kInductanceCoefficients);
+
     printf("%s <headphone_level_dbFS> - Set the headphone output level in dBFS (0 = maximum)\r\n",SerialCommands::kHeadphoneLevel);
     printf("%s <actuation_level_dbFS> - Set the actuation output level in dBFS (0 = maximum)\r\n",SerialCommands::kActuationLevel);
+    
 }
 

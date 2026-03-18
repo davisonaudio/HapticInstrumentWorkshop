@@ -421,6 +421,11 @@ void setBoardRevision(BoardRevision board_revision)
     makeAudioConnections();
 }
 
+void setInductanceFilter(Biquad::Coefficients filter_coefficients)
+{
+    transducer_processing.setInductanceFilterCoefficient(filter_coefficients);
+}
+
 BoardRevision getBoardRevision(){return board_rev;}
 
 sample_t getHeadphoneLevel(){return headphone_level_db;}

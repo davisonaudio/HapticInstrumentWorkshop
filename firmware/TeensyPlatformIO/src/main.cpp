@@ -479,6 +479,52 @@ void processSerialInput(char new_char)
                 }
             }
 
+            else if (!strncmp(parameter_arg, SerialCommands::kInductanceCoefficients, strlen(SerialCommands::kInductanceCoefficients)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    Biquad::Coefficients temp_coefficients;
+                    temp_coefficients.a0 = atof(value_arg);
+                    bool all_coefficients = true;
+                    char* next_val;
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.a1 = atof(next_val);} else { all_coefficients = false;}
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.a2 = atof(next_val);} else { all_coefficients = false;}
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.b1 = atof(next_val);} else { all_coefficients = false;}
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.b2 = atof(next_val);} else { all_coefficients = false;}
+
+                    if (all_coefficients)
+                    {
+                        AudioRouting::setInductanceFilter(temp_coefficients);
+                        printf("Inductance filtering set.\r\n");
+                    }
+                    else
+                    {
+                        printf("Not all coefficients entered correctly. Try again.\r\n");
+                    }
+                    
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("Indutance parameter\r\n");
+                }
+            }
+
             //Check for headphone level command
             else if (!strncmp(parameter_arg, SerialCommands::kHeadphoneLevel, strlen(SerialCommands::kHeadphoneLevel)))
             {
