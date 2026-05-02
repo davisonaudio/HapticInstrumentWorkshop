@@ -264,6 +264,7 @@ void readAndApplyEepromParameters()
     AudioRouting::current_cancellation_setup.lowpass_transducer_io = true;
     AudioRouting::current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::OUTPUT_LPF_CUTOFF_HZ);
     AudioRouting::current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ);
+    AudioRouting::current_cancellation_setup.inductance_coefficients = teensy_eeprom.readInductanceBiquad();
     AudioRouting::transducer_processing.setup(AudioRouting::current_cancellation_setup);
 
     AudioRouting::setBoardRevision(teensy_eeprom.readBoardRevision());
@@ -303,6 +304,7 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, AudioRouting::force_sensing.getWindowSizePeriods());
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION, VERSION_MIN);
+    teensy_eeprom.writeInductanceBiquad(AudioRouting::current_cancellation_setup.inductance_coefficients);
     teensy_eeprom.writeBoardRevision(AudioRouting::BoardRevision::REV_B);
     teensy_eeprom.writeAudioShieldMode(AudioRouting::getAudioShieldMode());
     printCurrentTime();

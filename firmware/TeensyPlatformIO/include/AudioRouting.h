@@ -423,6 +423,7 @@ void setBoardRevision(BoardRevision board_revision)
 
 void setInductanceFilter(Biquad::Coefficients filter_coefficients)
 {
+    current_cancellation_setup.inductance_coefficients = filter_coefficients;
     transducer_processing.setInductanceFilterCoefficient(filter_coefficients);
 }
 
@@ -457,6 +458,11 @@ void resetToDefaultParameters()
     current_cancellation_setup.lowpass_transducer_io = true;
     current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = 10000.0;
     current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = 1000.0;
+    current_cancellation_setup.inductance_coefficients.a0 = 1.0;
+    current_cancellation_setup.inductance_coefficients.a1 = 0.0;
+    current_cancellation_setup.inductance_coefficients.a2 = 0.0;
+    current_cancellation_setup.inductance_coefficients.b1 = 0.0;
+    current_cancellation_setup.inductance_coefficients.b2 = 0.0;
     transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
     transducer_processing.setup(current_cancellation_setup);
 

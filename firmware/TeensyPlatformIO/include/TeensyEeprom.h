@@ -14,6 +14,7 @@ For more info on the Teensy EEPROM see: https://www.pjrc.com/teensy/td_libs_EEPR
 //Include the Arduino EEPROM library
 #include "EEPROM.h"
 #include "AudioRouting.h"
+#include "au_Biquad.h"
 
 
 class TeensyEeprom
@@ -40,6 +41,11 @@ class TeensyEeprom
             INPUT_LPF_CUTOFF_HZ,
             HEADPHONE_LEVEL_DB,
             ACTUATION_LEVEL_DB,
+            INDUCTANCE_BQ_A0,
+            INDUCTANCE_BQ_A1,
+            INDUCTANCE_BQ_A2,
+            INDUCTANCE_BQ_B1,
+            INDUCTANCE_BQ_B2,
 
             NUM_FLOAT_PARAMETERS
         };
@@ -102,6 +108,26 @@ class TeensyEeprom
         AudioRouting::AudioShieldMode readAudioShieldMode()
         {
             return static_cast<AudioRouting::AudioShieldMode>(read(ByteParameters::AUDIO_SHIELD_MODE));
+        }
+
+        void writeInductanceBiquad(Biquad::Coefficients coefficients)
+        {
+            write(FloatParameters::INDUCTANCE_BQ_A0, coefficients.a0);
+            write(FloatParameters::INDUCTANCE_BQ_A1, coefficients.a1);
+            write(FloatParameters::INDUCTANCE_BQ_A2, coefficients.a2);
+            write(FloatParameters::INDUCTANCE_BQ_B1, coefficients.b1);
+            write(FloatParameters::INDUCTANCE_BQ_B2, coefficients.b2);
+        }
+
+        Biquad::Coefficients readInductanceBiquad()
+        {
+            Biquad::Coefficients coefficients;
+            coefficients.a0 = read(FloatParameters::INDUCTANCE_BQ_A0);
+            coefficients.a1 = read(FloatParameters::INDUCTANCE_BQ_A1);
+            coefficients.a2 = read(FloatParameters::INDUCTANCE_BQ_A2);
+            coefficients.b1 = read(FloatParameters::INDUCTANCE_BQ_B1);
+            coefficients.b2 = read(FloatParameters::INDUCTANCE_BQ_B2);
+            return coefficients;
         }
 
 
