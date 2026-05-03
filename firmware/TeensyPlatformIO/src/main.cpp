@@ -387,6 +387,19 @@ void processSerialInput(char new_char)
         { //Check for arguments that have value parameters
             
 
+                        //Check for resonant frequency command
+            if (!strncmp(parameter_arg, SerialCommands::kModeString, strlen(SerialCommands::kModeString)))
+            {
+                if (value_arg)
+                { //Set the resonant frequency to the provided value
+                    AudioRouting::setAudioShieldMode(static_cast<AudioRouting::AudioShieldMode>(atoi(value_arg)));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current mode
+                    printf("%d\n", static_cast<int>(AudioRouting::getAudioShieldMode()));
+                }
+            }
+
             //Check for resonant frequency command
             if (!strncmp(parameter_arg, SerialCommands::kResonantFreqString, strlen(SerialCommands::kResonantFreqString)))
             {

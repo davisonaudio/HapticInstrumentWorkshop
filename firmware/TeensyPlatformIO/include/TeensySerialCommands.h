@@ -13,6 +13,7 @@ Date: 10/03/2025
 
 namespace SerialCommands
 {
+    const char* kModeString = "mode";
     const char* kNormalModeString = "normal";
     const char* kDebugModeString = "debug";
     const char* kAnalogModeString = "analog";
@@ -47,6 +48,7 @@ void printSerialHelp()
 {
     printf("Serial commands:\r\n");
     printf("For commands with value arguments, sending them without an argument will result in the current value being returned.\r\n");
+    printf("%s - Enter selected (integer number) mode.\r\n",SerialCommands::kModeString);
     printf("%s - Enter normal mode (exit any current error/debug state)\r\n",SerialCommands::kNormalModeString);
     printf("%s - Enter debug mode (changes audio routing, enables additional serial printing)\r\n",SerialCommands::kDebugModeString);
     printf("%s - Enter analog mode - routes audio from the audio shield instead of USB for connecting to external analog synths\r\n",SerialCommands::kAnalogModeString);
