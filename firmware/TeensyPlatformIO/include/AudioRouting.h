@@ -27,6 +27,7 @@ namespace AudioRouting {
 
 AudioInputI2SQuad        i2s_quad_in;
 AudioInputUSB            usb_in;
+AudioInputAnalog         adc_input;
 
 AudioOutputI2SQuad       i2s_quad_out;
 AudioOutputUSB           usb_out;
@@ -51,7 +52,8 @@ enum class AudioShieldMode
     ANALOG_ONLY,      //Audio shield replaces USB connection - audio in is sent to actuation amplifier and current return send to audio out
     STANDALONE_SYNTH,  //No external synth required. Inbuilt resonant synthesis models used and output over headphones.
     LOOPBACK_TEST,    //Loops back usb to usb and analog in to analog out
-    DEBUG
+    DEBUG,
+    ACCELEROMETER     //Outputs current and ADC input (accelerometer) to USB
 };
 AudioShieldMode audio_shield_mode;
 bool audio_shield_connected = false;
@@ -68,7 +70,7 @@ BoardRevision board_rev = BoardRevision::REV_B;
 class AudioRouter : public AudioStream
 {
 public:
-        static constexpr int NUM_INPUTS = 6;
+        static constexpr int NUM_INPUTS = 7;
         static constexpr int NUM_OUTPUTS = 5;
         enum class RouterInputs
         {
@@ -77,7 +79,8 @@ public:
             USB_L,
             USB_R,
             ANALOG_L,
-            ANALOG_R
+            ANALOG_R,
+            ADC
         };
         enum class RouterOutputs
         {
@@ -119,6 +122,7 @@ public:
                 sample_t amp_in_current = getSample(RouterInputs::AMP_CURRENT, i);
                 sample_t analog_in_l = getSample(RouterInputs::ANALOG_L, i);
                 sample_t analog_in_r = getSample(RouterInputs::ANALOG_R, i);
+                sample_t adc_in = getSample(RouterInputs::ADC, i);
 
                 //Apply volume level (simple linear scaling currently - could be improved)
                 usb_in_l *= volume_level;
@@ -171,8 +175,12 @@ public:
                     usb_out_l = processed.input_feedback_removed;
                     usb_out_r = analog_in_l; //Test with dry signal from analog in
                     amp_out = processed.output_to_transducer;
-                break;
-
+                    break;
+                case AudioShieldMode::ACCELEROMETER:
+                    usb_out_l = adc_in;
+                    usb_out_r = amp_in_current;
+                    amp_out = usb_in_l;
+                    break;
                 default:
                     break;
                 }
@@ -308,6 +316,8 @@ void makeAudioConnections()
     }
     audio_router.connectInput(AudioRouter::RouterInputs::USB_L, usb_in, 0);
     audio_router.connectInput(AudioRouter::RouterInputs::USB_R, usb_in, 1);
+
+    audio_router.connectInput(AudioRouter::RouterInputs::ADC, adc_input, 0);
 
     audio_router.connectOutput(AudioRouter::RouterOutputs::USB_L, usb_out, 0);
     audio_router.connectOutput(AudioRouter::RouterOutputs::USB_R, usb_out, 1);
