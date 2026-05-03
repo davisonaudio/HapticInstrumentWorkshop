@@ -285,6 +285,9 @@ void readAndApplyEepromParameters()
 
 }
 
+/*
+ * Write the current parameters into the flash
+ */
 void writeEepromParameters()
 {
     teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ, AudioRouting::current_cancellation_setup.resonant_frequency_hz);
@@ -312,7 +315,9 @@ void writeEepromParameters()
 }
 
 
-
+/*
+ * Parse serial character input (parses on newline '\n')
+ */
 void processSerialInput(char new_char)
 {
     if (input_char_index == (MAX_SERIAL_INPUT_CHARS - 1))
@@ -649,12 +654,18 @@ void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_va
     }
 }
 
+/*
+ * Send MIDI CC value for force sensing (CC 0)
+ */
 void txForceSenseVal(sample_t force_sense_val)
 {
     uint8_t force_sense_byte = static_cast<uint8_t>(127 * force_sense_val);
     usbMIDI.sendControlChange(static_cast<uint8_t>(MidiComms::ControlChangeTypes::TX_FORCE_SENSE), force_sense_byte, 1);
 }
 
+/*
+ * Toggle inbuilt Teensy LED
+ */
 void blinkLED() {
     static bool led_state = false;
     led_state = !led_state;
@@ -662,7 +673,9 @@ void blinkLED() {
 }
 
 
-
+/*
+ * Send basic information about device over serial
+ */
 void sendSerialDetails()
 {
     printCurrentTime();
