@@ -27,56 +27,13 @@ namespace AudioRouting {
 
 AudioInputI2SQuad        i2s_quad_in;
 AudioInputUSB            usb_in;
+AudioInputAnalog         adc_input(A0);
 
 AudioOutputI2SQuad       i2s_quad_out;
 AudioOutputUSB           usb_out;
 
-AudioRecordQueue         queue_inR_usb;
-AudioRecordQueue         queue_inL_usb;
-AudioRecordQueue         queue_inL_max98389;
-AudioRecordQueue         queue_inR_max98389;
-AudioRecordQueue         queue_inL_audio_shield;
-AudioRecordQueue         queue_inR_audio_shield;
-
-//Output to MAX98389 amplifier queues
-AudioPlayQueue           queue_outR_max98389;
-AudioPlayQueue           queue_outL_max98389;
-AudioPlayQueue           queue_outR_usb;
-AudioPlayQueue           queue_outL_usb;
-//Output to teensy audio shield queues
-AudioPlayQueue           queue_outR_audio_shield;
-AudioPlayQueue           queue_outL_audio_shield;
-
-AudioConnection          patchAmpInL(i2s_quad_in, 2, queue_inL_max98389, 0);
-AudioConnection          patchAmpInR(i2s_quad_in, 3, queue_inR_max98389, 0);
-AudioConnection          patchUsbInL(usb_in, 0, queue_inL_usb, 0);
-AudioConnection          patchUsbInR(usb_in, 1, queue_inR_usb, 0);
-
-#ifdef BOARD_VERSION_REV_B
-AudioConnection          patchCord5(queue_outR_max98389, 0, i2s_quad_out, 3);
-AudioConnection          patchCord6(queue_outL_max98389, 0, i2s_quad_out, 2);
-
-AudioConnection          patchCord9(queue_outR_audio_shield, 0, i2s_quad_out, 1);
-AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 0);
-#endif
-
-#ifdef BOARD_VERSION_REV_A
-AudioConnection          patchCord5(queue_outR_max98389, 0, i2s_quad_out, 1);
-AudioConnection          patchCord6(queue_outL_max98389, 0, i2s_quad_out, 0);
-AudioConnection          patchCord9(queue_outR_audio_shield, 0, i2s_quad_out, 3);
-AudioConnection          patchCord10(queue_outL_audio_shield, 0, i2s_quad_out, 2);
-#endif
-
-
-AudioConnection          patchUsbOutR(queue_outR_usb, 0, usb_out, 1);
-AudioConnection          patchUsbOutL(queue_outL_usb, 0, usb_out, 0);
 
 AudioControlSGTL5000     audio_shield;
-
-teensy_sample_t buf_inL_usb[AUDIO_BLOCK_SAMPLES];
-teensy_sample_t buf_inR_usb[AUDIO_BLOCK_SAMPLES];
-teensy_sample_t buf_inL_i2s[AUDIO_BLOCK_SAMPLES];
-teensy_sample_t buf_inR_i2s[AUDIO_BLOCK_SAMPLES];
 
 
 TransducerFeedbackCancellation transducer_processing;
@@ -94,12 +51,283 @@ enum class AudioShieldMode
     HP_OP_PIEZO_IP,   //Same as HEADPHONE_OUTPUT but audio input is highpassed and mixed with current return for excitation input (for additional piezo)
     ANALOG_ONLY,      //Audio shield replaces USB connection - audio in is sent to actuation amplifier and current return send to audio out
     STANDALONE_SYNTH,  //No external synth required. Inbuilt resonant synthesis models used and output over headphones.
-    DEBUG
+    LOOPBACK_TEST,    //Loops back usb to usb and analog in to analog out
+    DEBUG,
+    ACCELEROMETER,     //Outputs current and ADC input (accelerometer) to USB
+    COMPARE            //Left channel = cancelled, right = raw current
 };
 AudioShieldMode audio_shield_mode;
 bool audio_shield_connected = false;
 bool max_amp_configured = false;
 
+enum class BoardRevision
+{ //Amplifier PCB revision (affects i2s pin assignment)
+    REV_A = 0,
+    REV_B
+};
+BoardRevision board_rev = BoardRevision::REV_B;
+
+
+class AudioRouter : public AudioStream
+{
+public:
+        static constexpr int NUM_INPUTS = 7;
+        static constexpr int NUM_OUTPUTS = 5;
+        enum class RouterInputs
+        {
+            AMP_CURRENT,
+            AMP_VOLTAGE,
+            USB_L,
+            USB_R,
+            ANALOG_L,
+            ANALOG_R,
+            ADC
+        };
+        enum class RouterOutputs
+        {
+            AMP,
+            USB_L,
+            USB_R,
+            ANALOG_L,
+            ANALOG_R
+        };        
+        AudioRouter() : AudioStream(NUM_INPUTS, inputQueueArray) {
+          // any extra initialization
+        }
+        void update(void){
+
+            //Receive new input buffers for each inputs
+            for (int i = 0 ; i < NUM_INPUTS ; i++)
+            {
+                current_input_queues[i] = receiveWritable(i);
+            }
+
+            for (int i = 0 ; i < NUM_OUTPUTS ; i++)
+            {
+                current_output_queues[i] = allocate();
+            }
+
+            /*
+             * Process audio here
+             */
+            //Get User's USB volume setting
+            float volume_level = usb_in.volume(); //0.0 - 1.0
+
+            //Loop through each sample in the buffers
+            for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
+
+                //Convert all incoming samples from int16 to normalised float
+                sample_t usb_in_l = getSample(RouterInputs::USB_L, i);
+                sample_t usb_in_r = getSample(RouterInputs::USB_R, i);
+                sample_t amp_in_voltage = getSample(RouterInputs::AMP_VOLTAGE, i);
+                sample_t amp_in_current = getSample(RouterInputs::AMP_CURRENT, i);
+                sample_t analog_in_l = getSample(RouterInputs::ANALOG_L, i);
+                sample_t analog_in_r = getSample(RouterInputs::ANALOG_R, i);
+                sample_t adc_in = getSample(RouterInputs::ADC, i);
+
+                //Apply volume level (simple linear scaling currently - could be improved)
+                usb_in_l *= volume_level;
+                usb_in_r *= volume_level;
+
+                //Cancel actuation signal from sensed signal
+                TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
+                unprocessed.output_to_transducer = usb_in_l;
+                unprocessed.input_from_transducer = amp_in_current; //Current measurement from amp
+                unprocessed.reference_input_loopback = amp_in_voltage; //Voltage measurement from amp
+                TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
+
+                sample_t usb_out_l, usb_out_r, amp_out, analog_out_l, analog_out_r;
+
+                switch (audio_shield_mode)
+                {
+                case AudioShieldMode::DEBUG:
+                    usb_out_l = amp_in_current;
+                    usb_out_r = amp_in_voltage;
+                    amp_out = usb_in_l;
+                    break;
+                case AudioShieldMode::LOOPBACK_TEST:
+                    usb_out_l = usb_in_l;
+                    usb_out_r = usb_in_r;
+                    analog_out_l = analog_in_l;
+                    analog_out_r = analog_in_r;
+                    break;
+                case AudioShieldMode::STANDALONE_SYNTH:
+                    amp_out = kp_synth.process(processed.input_feedback_removed) * 5;
+                    usb_out_l = amp_out;
+                    usb_out_l = amp_out;
+                    analog_out_l = amp_out;
+                    analog_out_r = amp_out;
+                    break;
+                case AudioShieldMode::HEADPHONE_OUTPUT:
+                    analog_out_l = usb_in_l;
+                    analog_out_r = usb_in_r;
+                    usb_out_l = processed.input_feedback_removed;
+                    usb_out_r = processed.input_feedback_removed;
+                    amp_out = processed.output_to_transducer;
+                    break;
+                case AudioShieldMode::DISCONNECTED:
+                    usb_out_l = processed.input_feedback_removed;
+                    usb_out_r = processed.input_feedback_removed;
+                    amp_out = processed.output_to_transducer;
+                    break;
+                case AudioShieldMode::HP_OP_PIEZO_IP: //TODO: Implement piezo routing?
+                    analog_out_l = usb_in_l;
+                    analog_out_r = usb_in_r;
+                    usb_out_l = processed.input_feedback_removed;
+                    usb_out_r = analog_in_l; //Test with dry signal from analog in
+                    amp_out = processed.output_to_transducer;
+                    break;
+                case AudioShieldMode::ACCELEROMETER:
+                    usb_out_l = adc_in;
+                    usb_out_r = amp_in_current;
+                    amp_out = usb_in_l;
+                    break;
+                case AudioShieldMode::COMPARE:
+                    usb_out_l = processed.input_feedback_removed;
+                    usb_out_r = amp_in_current;
+                    amp_out = usb_in_l;
+                    break;
+                default:
+                    break;
+                }
+
+                // force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
+                force_sensing.process(amp_in_voltage, amp_in_current);
+
+                //Scaling to appropriate level
+                amp_out *= dBToLin(actuation_level_db);
+                analog_out_l *= dBToLin(headphone_level_db);
+                analog_out_r *= dBToLin(headphone_level_db);
+
+                //Send out samples to buffers
+                setSample(RouterOutputs::AMP, i, amp_out);
+                setSample(RouterOutputs::USB_L, i, usb_out_l);
+                setSample(RouterOutputs::USB_R, i, usb_out_r);
+                setSample(RouterOutputs::ANALOG_L, i, analog_out_l);
+                setSample(RouterOutputs::ANALOG_R, i, analog_out_r);
+            }
+
+            //Transmit the buffers to the appropriate outputs and release memory
+            for (int i = 0 ; i < NUM_OUTPUTS ; i++)
+            {
+                if (current_output_queues[i])
+                {
+                    transmit(current_output_queues[i], i);
+                    release(current_output_queues[i]);
+                }
+            }
+            
+            //Free the buffers that have been used
+            for (int i = 0 ; i < NUM_INPUTS ; i++)
+            {
+                if (current_input_queues[i])
+                {
+                    release(current_input_queues[i]);
+                }
+            }
+
+        }
+
+        void connectInput(RouterInputs input_route, AudioStream &source_object, int source_channel = 0)
+        {
+            m_input_connections[static_cast<int>(input_route)].connect(source_object, source_channel, *this, static_cast<int>(input_route));
+        }
+
+        void connectOutput(RouterOutputs output_route, AudioStream &destination_object, int destination_channel = 0)
+        {
+            m_output_connections[static_cast<int>(output_route)].connect(*this, static_cast<int>(output_route), destination_object, destination_channel);
+        }
+
+        void disconnectInputs()
+        {
+            for (int i = 0 ; i < NUM_INPUTS ; i++)
+            {
+                m_input_connections[i].disconnect();
+            }
+        }
+
+        void disconnectOutputs()
+        {
+            for (int i = 0 ; i < NUM_OUTPUTS ; i++)
+            {
+                m_output_connections[i].disconnect();
+            }
+        }
+
+private:
+        audio_block_t *inputQueueArray[NUM_INPUTS];
+        audio_block_t *current_input_queues[NUM_INPUTS];
+        audio_block_t *current_output_queues[NUM_OUTPUTS];
+        AudioConnection m_input_connections[NUM_INPUTS];
+        AudioConnection m_output_connections[NUM_OUTPUTS];
+
+        sample_t getSample(RouterInputs input_type, int index)
+        {
+            audio_block_t *buffer_pointer = current_input_queues[static_cast<int>(input_type)];
+            if (buffer_pointer)
+            {
+                return intToNormalised<teensy_sample_t>(buffer_pointer->data[index]);
+            }
+            else
+            {
+                return 0.0;
+            }
+        }
+
+        void setSample(RouterOutputs output_type, int index, sample_t value)
+        {
+            audio_block_t *buffer_pointer = current_output_queues[static_cast<int>(output_type)];
+            if (buffer_pointer)
+            {
+                buffer_pointer->data[index] = normalisedToInt<teensy_sample_t>(value);
+            }
+            else
+            {
+                buffer_pointer->data[index] = normalisedToInt<teensy_sample_t>(0.0);
+            }
+        }
+
+};
+
+AudioRouter audio_router;
+
+
+
+void makeAudioConnections()
+{
+    audio_router.disconnectInputs();
+    audio_router.disconnectOutputs();
+
+    if (board_rev == BoardRevision::REV_A)
+    {
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 1);
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 0);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_L, i2s_quad_in, 2);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_R, i2s_quad_in, 3);
+
+        audio_router.connectOutput(AudioRouter::RouterOutputs::AMP, i2s_quad_out, 0);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_L, i2s_quad_out, 2);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_R, i2s_quad_out, 3);   
+    }
+    else if (board_rev == BoardRevision::REV_B)
+    {
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_CURRENT, i2s_quad_in, 3);
+        audio_router.connectInput(AudioRouter::RouterInputs::AMP_VOLTAGE, i2s_quad_in, 2);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_L, i2s_quad_in, 0);
+        audio_router.connectInput(AudioRouter::RouterInputs::ANALOG_R, i2s_quad_in, 1);
+
+        audio_router.connectOutput(AudioRouter::RouterOutputs::AMP, i2s_quad_out, 2);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_L, i2s_quad_out, 0);
+        audio_router.connectOutput(AudioRouter::RouterOutputs::ANALOG_R, i2s_quad_out, 1);
+    }
+    audio_router.connectInput(AudioRouter::RouterInputs::USB_L, usb_in, 0);
+    audio_router.connectInput(AudioRouter::RouterInputs::USB_R, usb_in, 1);
+
+    audio_router.connectInput(AudioRouter::RouterInputs::ADC, adc_input, 0);
+
+    audio_router.connectOutput(AudioRouter::RouterOutputs::USB_L, usb_out, 0);
+    audio_router.connectOutput(AudioRouter::RouterOutputs::USB_R, usb_out, 1);
+}
 
 void initialiseAudio()
 {
@@ -130,134 +358,13 @@ void initialiseAudio()
     force_sensing.setup();
     kp_synth.setFrequency(161);
 
-    AudioMemory(32);
+    AudioMemory(128);
 
+    //makeAudioConnections();
 
-    //Begin audio buffer queues
-    queue_inL_usb.begin();
-    queue_inR_usb.begin();
-    queue_inL_max98389.begin();
-    queue_inR_max98389.begin();
-    // queue_inL_audio_shield.begin();
-    // queue_inR_audio_shield.begin();
 }
 
-void audioRouterProcess()
-{
-    if (!queue_inL_max98389.available())
-    {
-        return; //Only proceed when buffers are available
-    }
 
-    int16_t *bp_outL_usb, *bp_outR_usb, *bp_outL_i2s, *bp_outR_i2s, *bp_outL_audio_shield, *bp_outR_audio_shield;
-
-
-    //Copy queue input buffers
-    if (queue_inL_usb.available() && queue_inR_usb.available())
-    { //This doesn't block on waiting for USB buffers because new buffers will not always be sent if there is no audio output. This would then block the whole programme indefinitely.
-        memcpy(buf_inL_usb, queue_inL_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
-        memcpy(buf_inR_usb, queue_inR_usb.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
-        queue_inL_usb.freeBuffer();
-        queue_inR_usb.freeBuffer();
-    }
-
-    memcpy(buf_inL_i2s, queue_inL_max98389.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
-    memcpy(buf_inR_i2s, queue_inR_max98389.readBuffer(), sizeof(teensy_sample_t)*AUDIO_BLOCK_SAMPLES);
-    
-    //Free queue input buffers
-    queue_inL_max98389.freeBuffer();
-    queue_inR_max98389.freeBuffer();
-
-    // Get pointers to "empty" output buffers
-    bp_outL_i2s = queue_outL_max98389.getBuffer();
-    bp_outR_i2s = queue_outR_max98389.getBuffer();
-    bp_outL_usb = queue_outL_usb.getBuffer();
-    bp_outR_usb = queue_outR_usb.getBuffer();
-
-    bp_outL_audio_shield = queue_outL_audio_shield.getBuffer();
-    bp_outR_audio_shield = queue_outR_audio_shield.getBuffer();
-
-    //Get User's volume setting
-    float volume_level = usb_in.volume(); //0.0 - 1.0
-
-    //Loop through each sample in the buffers
-    for (int i = 0; i < AUDIO_BLOCK_SAMPLES; i++) {   
-
-        //Convert all incoming samples from int16 to normalised float
-        sample_t usb_in_l = intToNormalised<teensy_sample_t>(buf_inL_usb[i]);
-        sample_t usb_in_r = intToNormalised<teensy_sample_t>(buf_inR_usb[i]);
-        sample_t amp_in_voltage = intToNormalised<teensy_sample_t>(buf_inL_i2s[i]);
-        sample_t amp_in_current = intToNormalised<teensy_sample_t>(buf_inR_i2s[i]);
-
-        //Apply volume level (simple linear scaling currently - could be improved)
-        usb_in_l *= volume_level;
-        usb_in_r *= volume_level;
-
-        //Cancel actuation signal from sensed signal
-        TransducerFeedbackCancellation::UnprocessedSamples unprocessed;
-        unprocessed.output_to_transducer = usb_in_l;
-        unprocessed.input_from_transducer = amp_in_current; //Current measurement from amp
-        unprocessed.reference_input_loopback = amp_in_voltage; //Voltage measurement from amp
-        TransducerFeedbackCancellation::ProcessedSamples processed = transducer_processing.process(unprocessed);
-
-        sample_t usb_out_l, usb_out_r, amp_out;
-        if (audio_shield_mode == AudioShieldMode::DEBUG)
-        {
-            usb_out_l = amp_in_current;
-            usb_out_r = amp_in_voltage;//processed.input_feedback_removed;
-            amp_out = usb_in_l;
-        }
-        else
-        {
-            usb_out_l = processed.input_feedback_removed;
-            usb_out_r = processed.input_feedback_removed;
-            amp_out = processed.output_to_transducer;
-        }
-
-        if (audio_shield_mode == AudioShieldMode::STANDALONE_SYNTH)
-        {
-            amp_out = kp_synth.process(processed.input_feedback_removed) * 5;
-            bp_outL_audio_shield[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(headphone_level_db);
-            bp_outR_audio_shield[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(headphone_level_db);
-            usb_out_l = amp_out;
-            usb_out_r = amp_out;
-        }
-
-        // Convert from normalised float back to int16 and add into output buffers
-        bp_outL_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(actuation_level_db);
-        bp_outR_i2s[i] = normalisedToInt<teensy_sample_t>(amp_out) * dBToLin(actuation_level_db);
-        bp_outL_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_l);
-        bp_outR_usb[i] = normalisedToInt<teensy_sample_t>(usb_out_r);
-        if (audio_shield_mode == AudioShieldMode::HEADPHONE_OUTPUT)
-        { //Straight copy of incoming USB audio to headphone output
-            bp_outL_audio_shield[i] = normalisedToInt<teensy_sample_t>(usb_in_l) * dBToLin(headphone_level_db);
-            bp_outR_audio_shield[i] = normalisedToInt<teensy_sample_t>(usb_in_r) * dBToLin(headphone_level_db);
-        }
-
-        // force_sensing.process(processed.input_feedback_removed, processed.output_to_transducer);
-        force_sensing.process(amp_in_voltage, amp_in_current);
-    }
-
-    // Play output buffers. Retry until success.
-    while(queue_outL_max98389.playBuffer()){
-        Serial.println("Play MAX98389 left fail.");
-    }
-    while(queue_outR_max98389.playBuffer()){
-        Serial.println("Play MAX98389 right fail.");
-    }
-    while(queue_outL_usb.playBuffer()){
-        Serial.println("Play usb left fail.");
-    }
-    while(queue_outR_usb.playBuffer()){
-        Serial.println("Play usb right fail.");
-    }
-    while(queue_outL_audio_shield.playBuffer()){
-        Serial.println("Play audio shield left fail.");
-    }
-    while(queue_outR_audio_shield.playBuffer()){
-        Serial.println("Play audio shield right fail.");
-    }
-}
 
 void setResonantFrequency(sample_t resonant_frequency_hz)
 {
@@ -314,6 +421,35 @@ void setActuationLevel(sample_t level_db)
     actuation_level_db = level_db; //auClamp(level_db, -200.0, 0);
 }
 
+void setKarplusFreq(sample_t kp_freq_hz)
+{
+    kp_synth.setFrequency(kp_freq_hz);
+}
+
+void setKarplusBlend(sample_t kp_blend)
+{
+    kp_synth.setBlend(kp_blend);
+}
+
+void setBoardRevision(BoardRevision board_revision)
+{
+    board_rev = board_revision;
+    makeAudioConnections();
+}
+
+void setInductanceFilter(Biquad::Coefficients filter_coefficients)
+{
+    current_cancellation_setup.inductance_coefficients = filter_coefficients;
+    transducer_processing.setInductanceFilterCoefficient(filter_coefficients);
+}
+
+Biquad::Coefficients getInductanceCoefficients()
+{
+    return current_cancellation_setup.inductance_coefficients;
+}
+
+BoardRevision getBoardRevision(){return board_rev;}
+
 sample_t getHeadphoneLevel(){return headphone_level_db;}
 
 sample_t getActuationLevel(){return actuation_level_db;}
@@ -321,6 +457,11 @@ sample_t getActuationLevel(){return actuation_level_db;}
 void setAudioShieldMode(AudioShieldMode mode)
 {
     audio_shield_mode = mode;
+    if (mode == AudioShieldMode::HP_OP_PIEZO_IP)
+    {
+        audio_shield.inputSelect(AUDIO_INPUT_LINEIN);
+        //audio_shield.micGain(63);
+    }
 }
 AudioShieldMode getAudioShieldMode(){return audio_shield_mode;}
 
@@ -338,6 +479,11 @@ void resetToDefaultParameters()
     current_cancellation_setup.lowpass_transducer_io = true;
     current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = 10000.0;
     current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = 1000.0;
+    current_cancellation_setup.inductance_coefficients.a0 = 1.0;
+    current_cancellation_setup.inductance_coefficients.a1 = 0.0;
+    current_cancellation_setup.inductance_coefficients.a2 = 0.0;
+    current_cancellation_setup.inductance_coefficients.b1 = 0.0;
+    current_cancellation_setup.inductance_coefficients.b2 = 0.0;
     transducer_processing.setOscillatorFrequencyHz(RESONANT_FREQ_HZ);
     transducer_processing.setup(current_cancellation_setup);
 

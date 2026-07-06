@@ -14,6 +14,7 @@ For more info on the Teensy EEPROM see: https://www.pjrc.com/teensy/td_libs_EEPR
 //Include the Arduino EEPROM library
 #include "EEPROM.h"
 #include "AudioRouting.h"
+#include "au_Biquad.h"
 
 
 class TeensyEeprom
@@ -40,6 +41,11 @@ class TeensyEeprom
             INPUT_LPF_CUTOFF_HZ,
             HEADPHONE_LEVEL_DB,
             ACTUATION_LEVEL_DB,
+            INDUCTANCE_BQ_A0,
+            INDUCTANCE_BQ_A1,
+            INDUCTANCE_BQ_A2,
+            INDUCTANCE_BQ_B1,
+            INDUCTANCE_BQ_B2,
 
             NUM_FLOAT_PARAMETERS
         };
@@ -56,11 +62,7 @@ class TeensyEeprom
             NUM_BYTE_PARAMETERS = 128 // Leave buffer to enable additional byte parameters while maintaining backwards compatibility
         };
 
-        enum class BoardRevision
-        { //Amplifier PCB revision (affects i2s pin assignment)
-            REV_A = 0,
-            REV_B
-        };
+
 
         static const int NUM_EEPROM_BYTES = 1080; //Correct for Teensy 4.0
         static constexpr int BYTES_PER_FLOAT = sizeof(float);
@@ -88,14 +90,14 @@ class TeensyEeprom
             return readFloat(getEepromAddress(float_parameter));
         }
 
-        void writeBoardRevision(BoardRevision board_revision)
+        void writeBoardRevision(AudioRouting::BoardRevision board_revision)
         {
             write(ByteParameters::BOARD_REVISION, static_cast<uint8_t>(board_revision));
         }
 
-        BoardRevision readBoardRevision()
+        AudioRouting::BoardRevision readBoardRevision()
         {
-            return static_cast<BoardRevision>(read(ByteParameters::BOARD_REVISION));
+            return static_cast<AudioRouting::BoardRevision>(read(ByteParameters::BOARD_REVISION));
         }
 
         void writeAudioShieldMode(AudioRouting::AudioShieldMode shield_mode)
@@ -106,6 +108,26 @@ class TeensyEeprom
         AudioRouting::AudioShieldMode readAudioShieldMode()
         {
             return static_cast<AudioRouting::AudioShieldMode>(read(ByteParameters::AUDIO_SHIELD_MODE));
+        }
+
+        void writeInductanceBiquad(Biquad::Coefficients coefficients)
+        {
+            write(FloatParameters::INDUCTANCE_BQ_A0, coefficients.a0);
+            write(FloatParameters::INDUCTANCE_BQ_A1, coefficients.a1);
+            write(FloatParameters::INDUCTANCE_BQ_A2, coefficients.a2);
+            write(FloatParameters::INDUCTANCE_BQ_B1, coefficients.b1);
+            write(FloatParameters::INDUCTANCE_BQ_B2, coefficients.b2);
+        }
+
+        Biquad::Coefficients readInductanceBiquad()
+        {
+            Biquad::Coefficients coefficients;
+            coefficients.a0 = read(FloatParameters::INDUCTANCE_BQ_A0);
+            coefficients.a1 = read(FloatParameters::INDUCTANCE_BQ_A1);
+            coefficients.a2 = read(FloatParameters::INDUCTANCE_BQ_A2);
+            coefficients.b1 = read(FloatParameters::INDUCTANCE_BQ_B1);
+            coefficients.b2 = read(FloatParameters::INDUCTANCE_BQ_B2);
+            return coefficients;
         }
 
 

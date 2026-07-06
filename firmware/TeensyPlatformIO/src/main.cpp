@@ -23,7 +23,9 @@
 //#define BOARD_VERSION_REV_A
 #define BOARD_VERSION_REV_B
 
-#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
+
+
+#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
@@ -41,15 +43,15 @@
 #define MAX_SERIAL_INPUT_CHARS 256
 
 #if BUILD_RELEASE
-static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 4;
+static const unsigned int VERSION_MAJ = 2;
+static const unsigned int VERSION_MIN = 0;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
 static const unsigned int VERSION_MIN = 255;
 #endif
 
-const char VERSION_NOTES[] = "Minor fix to include reading of input/output LPF cutoff freqs from eeprom. Default input Fc now 1000Hz.";
+const char VERSION_NOTES[] = "Up version to 2.0. Contains lots of fixes and improvements - new audio routing modes, improved audio routing implementation, MIDI control, runtime revision detection, etc.";
 
 
 
@@ -66,7 +68,7 @@ int input_char_index = 0;
 
 TeensyEeprom teensy_eeprom;
 uint8_t serial_number;
-TeensySlider teensy_slider;
+TeensySlider teensy_slider(&Wire1);
 uint8_t slider_fw_version = 0;
 
 //Basic error states that can occur, used for debug prints and LED blink interval.
@@ -80,7 +82,6 @@ enum class ErrorStates
 };
 
 ErrorStates current_error_state;
-TeensyEeprom::BoardRevision board_revision;
 
 extern TransducerFeedbackCancellation::Setup AudioRouting::current_cancellation_setup;
 extern ForceSensing AudioRouting::force_sensing;
@@ -134,7 +135,7 @@ void setup() {
 
     AudioRouting::initialiseAudio();
 
-
+    Wire1.begin();
     
 
     //Setup feedback cancellation
@@ -153,6 +154,8 @@ void setup() {
     usbMIDI.setHandleControlChange(rxControlChange);
 
     sendSerialDetails();
+
+    
 }
 
 
@@ -162,12 +165,11 @@ unsigned long user_controls_time = 0;
 
 void loop() {
 
-    AudioRouting::audioRouterProcess();
-
     if (AudioRouting::force_sensing.valueAvailable())
     {
         txForceSenseVal(AudioRouting::force_sensing.getDamping());
         //printf("Force sense: %f\r\n",AudioRouting::force_sensing.getDamping());
+        teensy_slider.setLedBar(AudioRouting::force_sensing.getDamping() * 10, 100, true);
     }
 
     //Process USB Serial input (debugging)
@@ -179,9 +181,11 @@ void loop() {
     //Process USB MIDI input (configuring parameters)
     usbMIDI.read();
 
-    if (user_controls_time < (millis() - 1000))
+    if (user_controls_time < (millis() - 30))
     {
-
+        int pot_val = teensy_slider.readPot(5);
+        //printf("Pot: %d\r\n", pot_val);
+        //AudioRouting::setActuationLevel(pot_val - 127.0);
         // printf("Pot 1 value: %d \r\n",teensy_slider.readPot(1));
         // delayMicroseconds(300);
         // printf("Switch 0: %d \r\n",teensy_slider.getSwitchPressCount(0));
@@ -263,7 +267,10 @@ void readAndApplyEepromParameters()
     AudioRouting::current_cancellation_setup.lowpass_transducer_io = true;
     AudioRouting::current_cancellation_setup.output_to_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::OUTPUT_LPF_CUTOFF_HZ);
     AudioRouting::current_cancellation_setup.input_from_transducer_lpf_cutoff_hz = teensy_eeprom.read(TeensyEeprom::FloatParameters::INPUT_LPF_CUTOFF_HZ);
+    AudioRouting::current_cancellation_setup.inductance_coefficients = teensy_eeprom.readInductanceBiquad();
     AudioRouting::transducer_processing.setup(AudioRouting::current_cancellation_setup);
+
+    AudioRouting::setBoardRevision(teensy_eeprom.readBoardRevision());
 
 
 
@@ -281,6 +288,9 @@ void readAndApplyEepromParameters()
 
 }
 
+/*
+ * Write the current parameters into the flash
+ */
 void writeEepromParameters()
 {
     teensy_eeprom.write(TeensyEeprom::FloatParameters::RESONANT_FREQUENCY_HZ, AudioRouting::current_cancellation_setup.resonant_frequency_hz);
@@ -300,13 +310,17 @@ void writeEepromParameters()
     teensy_eeprom.write(TeensyEeprom::ByteParameters::GOERTZEL_WINDOW_LENGTH, AudioRouting::force_sensing.getWindowSizePeriods());
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MAJ_VERSION, VERSION_MAJ);
     teensy_eeprom.write(TeensyEeprom::ByteParameters::LAST_SAVED_MIN_VERSION, VERSION_MIN);
+    teensy_eeprom.writeInductanceBiquad(AudioRouting::current_cancellation_setup.inductance_coefficients);
+    teensy_eeprom.writeBoardRevision(AudioRouting::BoardRevision::REV_B);
     teensy_eeprom.writeAudioShieldMode(AudioRouting::getAudioShieldMode());
     printCurrentTime();
     printf(" Parameters saved to EEPROM.\r\n");
 }
 
 
-
+/*
+ * Parse serial character input (parses on newline '\n')
+ */
 void processSerialInput(char new_char)
 {
     if (input_char_index == (MAX_SERIAL_INPUT_CHARS - 1))
@@ -337,6 +351,16 @@ void processSerialInput(char new_char)
             AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::STANDALONE_SYNTH);
             printf("Karplus strong synth enabled\r\n");
         }
+        else if (!strncmp(parameter_arg, SerialCommands::kLoopbackTestModeString, strlen(SerialCommands::kLoopbackTestModeString)))
+        {
+            AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::LOOPBACK_TEST);
+            printf("Loopback Test mode enabled\r\n");
+        }
+        else if (!strncmp(parameter_arg, SerialCommands::kPiezoModeString, strlen(SerialCommands::kPiezoModeString)))
+        {
+            AudioRouting::setAudioShieldMode(AudioRouting::AudioShieldMode::HP_OP_PIEZO_IP);
+            printf("Piezo mode enabled\r\n");
+        }
         else if (!strncmp(parameter_arg, SerialCommands::kResetParametersString, strlen(SerialCommands::kResetParametersString)))
         {
             AudioRouting::resetToDefaultParameters();
@@ -365,6 +389,19 @@ void processSerialInput(char new_char)
         else
         { //Check for arguments that have value parameters
             
+
+                        //Check for resonant frequency command
+            if (!strncmp(parameter_arg, SerialCommands::kModeString, strlen(SerialCommands::kModeString)))
+            {
+                if (value_arg)
+                { //Set the resonant frequency to the provided value
+                    AudioRouting::setAudioShieldMode(static_cast<AudioRouting::AudioShieldMode>(atoi(value_arg)));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current mode
+                    printf("%d\n", static_cast<int>(AudioRouting::getAudioShieldMode()));
+                }
+            }
 
             //Check for resonant frequency command
             if (!strncmp(parameter_arg, SerialCommands::kResonantFreqString, strlen(SerialCommands::kResonantFreqString)))
@@ -465,6 +502,54 @@ void processSerialInput(char new_char)
                 }
             }
 
+            else if (!strncmp(parameter_arg, SerialCommands::kInductanceCoefficients, strlen(SerialCommands::kInductanceCoefficients)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    printf(value_arg);
+                    Biquad::Coefficients temp_coefficients;
+                    temp_coefficients.a0 = atof(value_arg);
+                    bool all_coefficients = true;
+                    char* next_val;
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.a1 = atof(next_val);} else { all_coefficients = false;}
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.a2 = atof(next_val);} else { all_coefficients = false;}
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.b1 = atof(next_val);} else { all_coefficients = false;}
+
+                    next_val = strtok(NULL, " ");
+                    printf(next_val);
+                    printf("\r\n");
+                    if (next_val){temp_coefficients.b2 = atof(next_val);} else { all_coefficients = false;}
+
+                    if (all_coefficients)
+                    {
+                        AudioRouting::setInductanceFilter(temp_coefficients);
+                        printf("Inductance filtering set.\r\n");
+                    }
+                    else
+                    {
+                        printf("Not all coefficients were provided. Filtering not set.\r\n");
+                    }
+                    
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    Biquad::Coefficients coeffs = AudioRouting::getInductanceCoefficients();
+                    printf("%f %f %f %f %f\r\n",coeffs.a0,coeffs.a1,coeffs.a2,coeffs.b1,coeffs.b2);
+                }
+            }
+
             //Check for headphone level command
             else if (!strncmp(parameter_arg, SerialCommands::kHeadphoneLevel, strlen(SerialCommands::kHeadphoneLevel)))
             {
@@ -490,6 +575,20 @@ void processSerialInput(char new_char)
                 else
                 { //If value_arg = NULL then no value provided, return current value
                     printf("%f\n", AudioRouting::getActuationLevel());
+                }
+            }
+
+            //Check for PCB revision
+            else if (!strncmp(parameter_arg, SerialCommands::kRevisionString, strlen(SerialCommands::kRevisionString)))
+            {
+                if (value_arg)
+                { //Set the resonance q to the provided value
+                    AudioRouting::setBoardRevision(static_cast<AudioRouting::BoardRevision>(atoi(value_arg)));
+                    printf("PCB revision set to: %d (0 = A, 1 = B). Don't forget to save to EEPROM!\r\n", atoi(value_arg));
+                }
+                else
+                { //If value_arg = NULL then no value provided, return current value
+                    printf("%d\n", static_cast<int>(AudioRouting::getBoardRevision()));
                 }
             }
 
@@ -555,18 +654,36 @@ void rxControlChange(uint8_t channel, uint8_t control_number, uint8_t control_va
             }
             AudioRouting::transducer_processing.setResonanceToneLevelDb( (sample_t) control_value - 127.0);
             break;
+        case MidiComms::ControlChangeTypes::ACTUATION_LEVEL:
+            AudioRouting::setActuationLevel((float) control_value - 127.0);
+            break;
+        case MidiComms::ControlChangeTypes::HEADPHONE_LEVEL:
+            AudioRouting::setHeadphoneLevel((float) control_value - 127.0);
+            break;
+        case MidiComms::ControlChangeTypes::KP_BLEND:
+            AudioRouting::setKarplusBlend((float) control_value / 127.0);
+            break;
+        case MidiComms::ControlChangeTypes::KP_FREQ:
+            AudioRouting::setKarplusFreq((float) (control_value + 20) * 10);
+            break;
         default:
             printf("Unknown MIDI control change (%d) received\r\n", control_number);
             break;
     }
 }
 
+/*
+ * Send MIDI CC value for force sensing (CC 0)
+ */
 void txForceSenseVal(sample_t force_sense_val)
 {
     uint8_t force_sense_byte = static_cast<uint8_t>(127 * force_sense_val);
     usbMIDI.sendControlChange(static_cast<uint8_t>(MidiComms::ControlChangeTypes::TX_FORCE_SENSE), force_sense_byte, 1);
 }
 
+/*
+ * Toggle inbuilt Teensy LED
+ */
 void blinkLED() {
     static bool led_state = false;
     led_state = !led_state;
@@ -574,7 +691,9 @@ void blinkLED() {
 }
 
 
-
+/*
+ * Send basic information about device over serial
+ */
 void sendSerialDetails()
 {
     printCurrentTime();
@@ -584,6 +703,19 @@ void sendSerialDetails()
     printf("Project version %d.%d\r\n", VERSION_MAJ, VERSION_MIN);
     printf("Version notes: %s\r\n",VERSION_NOTES);
     printf("Current resonant frequency: %fHz\r\n",AudioRouting::current_cancellation_setup.resonant_frequency_hz);
+
+    if (AudioRouting::getBoardRevision() == AudioRouting::BoardRevision::REV_A)
+    {
+        printf("Board version: Rev. A\r\n");
+    }
+    else if (AudioRouting::getBoardRevision() == AudioRouting::BoardRevision::REV_B)
+    {
+        printf("Board version: Rev. B\r\n");
+    }
+    else
+    {
+        printf("Unknown board version! (flash value: %d)\r\n",static_cast<int>(AudioRouting::getBoardRevision()));
+    }
     if (AudioRouting::audioShieldConnected())
     {
         printf("Teensy audio shield is connected\r\n");

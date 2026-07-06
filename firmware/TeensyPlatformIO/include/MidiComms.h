@@ -31,7 +31,12 @@ public:
     enum class ControlChangeTypes
     {
         TX_FORCE_SENSE = 0,
-        TONE_LEVEL
+        TONE_LEVEL,
+        KP_BLEND = 10,
+        KP_FREQ = 11,
+
+        ACTUATION_LEVEL = 14,
+        HEADPHONE_LEVEL = 15
     };
 
     enum class PitchBendChannels

@@ -36,6 +36,7 @@ public:
         sample_t input_from_transducer_lpf_cutoff_hz;
         AmplifierType amplifier_type;
         bool lowpass_transducer_io = true;
+        Biquad::Coefficients inductance_coefficients;
     };
 
     void setResonantFrequencyHz(sample_t resonant_frequency_hz);
@@ -43,7 +44,7 @@ public:
     void setResonancePeakGainDb(sample_t resonance_peak_gain_db);
     void setResonanceQ(sample_t resonance_q);
     void setResonanceToneLevelDb(sample_t resonance_tone_level_db);
-    void setInductanceFilterCoefficient(sample_t inductance_filter_coefficient);
+    void setInductanceFilterCoefficient(Biquad::Coefficients inductance_filter_coefficients);
     void setTransducerInputWidebandGainDb(sample_t transducer_input_wideband_gain_db);
     void setAdmittanceFilter();
     void setOutputLpfFrequencyHz(sample_t lpf_freq_hz);
@@ -81,7 +82,7 @@ private:
 
     Biquad m_resonance_filter;
     Biquad m_actuation_resonance_filter;
-    Onepole m_series_inductance_filter;
+    Biquad m_series_inductance_filter;
     ToneGenerator m_resonance_tone;
     sample_t m_transducer_input_wideband_gain_lin;
 
@@ -141,9 +142,9 @@ void TransducerFeedbackCancellation::setResonanceToneLevelDb(sample_t resonance_
 {
     m_resonance_tone.setLeveldB(resonance_tone_level_db);
 }
-void TransducerFeedbackCancellation::setInductanceFilterCoefficient(sample_t inductance_filter_coefficient)\
+void TransducerFeedbackCancellation::setInductanceFilterCoefficient(Biquad::Coefficients inductance_filter_coefficients)
 {
-    m_series_inductance_filter.setB1(inductance_filter_coefficient);
+    m_series_inductance_filter.setCoefficients(inductance_filter_coefficients);
 }
 
 void TransducerFeedbackCancellation::setTransducerInputWidebandGainDb(sample_t transducer_input_wideband_gain_db)
@@ -204,8 +205,8 @@ void TransducerFeedbackCancellation::setup(Setup setup_parameters)
     actuation_resonance_filter_setup.filter_type = Biquad::FilterType::PEAK;
     m_actuation_resonance_filter.setup(actuation_resonance_filter_setup);
 
-    //Setup of series inductance modelling filter (causes rise in impedance at HF) using onepole filter
-    m_series_inductance_filter.setB1(setup_parameters.inductance_filter_coefficient);
+    //Setup of series inductance modelling filter (causes rise in impedance at HF) using biquad filter
+    m_series_inductance_filter.setCoefficients(setup_parameters.inductance_coefficients);
 
     m_transducer_input_wideband_gain_lin = dBToLin(setup_parameters.transducer_input_wideband_gain_db);
 
@@ -281,7 +282,7 @@ sample_t TransducerFeedbackCancellation::applyTransducerModelFilter(sample_t inp
     if(amplifier_type == AmplifierType::CURRENT_DRIVE){
         output = m_resonance_filter.process(input_sample);
 
-        //output = m_series_inductance_filter.process(output);
+        output = m_series_inductance_filter.process(output);
     }
     else{
         output = input_sample;
