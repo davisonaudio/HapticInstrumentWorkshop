@@ -25,7 +25,7 @@
 
 
 
-#define BUILD_RELEASE 0 //Set to 1 when generating a release build .hex file
+#define BUILD_RELEASE 1 //Set to 1 when generating a release build .hex file
 
 // Write the defined serial number byte to EEPROM when flashing if enabled
 // Once done, disable the write serial  to EEPROM and reflash Teensy (avoids the code writing the serial number at every startup).
@@ -43,15 +43,15 @@
 #define MAX_SERIAL_INPUT_CHARS 256
 
 #if BUILD_RELEASE
-static const unsigned int VERSION_MAJ = 1;
-static const unsigned int VERSION_MIN = 4;
+static const unsigned int VERSION_MAJ = 2;
+static const unsigned int VERSION_MIN = 0;
 #else
 //Set version number to 255.255 for debug builds to avoid confusion
 static const unsigned int VERSION_MAJ = 255;
 static const unsigned int VERSION_MIN = 255;
 #endif
 
-const char VERSION_NOTES[] = "Minor fix to include reading of input/output LPF cutoff freqs from eeprom. Default input Fc now 1000Hz.";
+const char VERSION_NOTES[] = "Up version to 2.0. Contains lots of fixes and improvements - new audio routing modes, improved audio routing implementation, MIDI control, runtime revision detection, etc.";
 
 
 
@@ -68,7 +68,7 @@ int input_char_index = 0;
 
 TeensyEeprom teensy_eeprom;
 uint8_t serial_number;
-TeensySlider teensy_slider;
+TeensySlider teensy_slider(&Wire1);
 uint8_t slider_fw_version = 0;
 
 //Basic error states that can occur, used for debug prints and LED blink interval.
@@ -135,7 +135,7 @@ void setup() {
 
     AudioRouting::initialiseAudio();
 
-
+    Wire1.begin();
     
 
     //Setup feedback cancellation
@@ -169,6 +169,7 @@ void loop() {
     {
         txForceSenseVal(AudioRouting::force_sensing.getDamping());
         //printf("Force sense: %f\r\n",AudioRouting::force_sensing.getDamping());
+        teensy_slider.setLedBar(AudioRouting::force_sensing.getDamping() * 10, 100, true);
     }
 
     //Process USB Serial input (debugging)
@@ -180,9 +181,11 @@ void loop() {
     //Process USB MIDI input (configuring parameters)
     usbMIDI.read();
 
-    if (user_controls_time < (millis() - 1000))
+    if (user_controls_time < (millis() - 30))
     {
-
+        int pot_val = teensy_slider.readPot(5);
+        //printf("Pot: %d\r\n", pot_val);
+        //AudioRouting::setActuationLevel(pot_val - 127.0);
         // printf("Pot 1 value: %d \r\n",teensy_slider.readPot(1));
         // delayMicroseconds(300);
         // printf("Switch 0: %d \r\n",teensy_slider.getSwitchPressCount(0));
@@ -503,6 +506,7 @@ void processSerialInput(char new_char)
             {
                 if (value_arg)
                 { //Set the resonance q to the provided value
+                    printf(value_arg);
                     Biquad::Coefficients temp_coefficients;
                     temp_coefficients.a0 = atof(value_arg);
                     bool all_coefficients = true;
@@ -535,13 +539,14 @@ void processSerialInput(char new_char)
                     }
                     else
                     {
-                        printf("Not all coefficients entered correctly. Try again.\r\n");
+                        printf("Not all coefficients were provided. Filtering not set.\r\n");
                     }
                     
                 }
                 else
                 { //If value_arg = NULL then no value provided, return current value
-                    printf("Indutance parameter\r\n");
+                    Biquad::Coefficients coeffs = AudioRouting::getInductanceCoefficients();
+                    printf("%f %f %f %f %f\r\n",coeffs.a0,coeffs.a1,coeffs.a2,coeffs.b1,coeffs.b2);
                 }
             }
 

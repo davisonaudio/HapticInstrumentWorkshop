@@ -27,7 +27,7 @@ namespace AudioRouting {
 
 AudioInputI2SQuad        i2s_quad_in;
 AudioInputUSB            usb_in;
-AudioInputAnalog         adc_input;
+AudioInputAnalog         adc_input(A0);
 
 AudioOutputI2SQuad       i2s_quad_out;
 AudioOutputUSB           usb_out;
@@ -53,7 +53,8 @@ enum class AudioShieldMode
     STANDALONE_SYNTH,  //No external synth required. Inbuilt resonant synthesis models used and output over headphones.
     LOOPBACK_TEST,    //Loops back usb to usb and analog in to analog out
     DEBUG,
-    ACCELEROMETER     //Outputs current and ADC input (accelerometer) to USB
+    ACCELEROMETER,     //Outputs current and ADC input (accelerometer) to USB
+    COMPARE            //Left channel = cancelled, right = raw current
 };
 AudioShieldMode audio_shield_mode;
 bool audio_shield_connected = false;
@@ -178,6 +179,11 @@ public:
                     break;
                 case AudioShieldMode::ACCELEROMETER:
                     usb_out_l = adc_in;
+                    usb_out_r = amp_in_current;
+                    amp_out = usb_in_l;
+                    break;
+                case AudioShieldMode::COMPARE:
+                    usb_out_l = processed.input_feedback_removed;
                     usb_out_r = amp_in_current;
                     amp_out = usb_in_l;
                     break;
@@ -435,6 +441,11 @@ void setInductanceFilter(Biquad::Coefficients filter_coefficients)
 {
     current_cancellation_setup.inductance_coefficients = filter_coefficients;
     transducer_processing.setInductanceFilterCoefficient(filter_coefficients);
+}
+
+Biquad::Coefficients getInductanceCoefficients()
+{
+    return current_cancellation_setup.inductance_coefficients;
 }
 
 BoardRevision getBoardRevision(){return board_rev;}

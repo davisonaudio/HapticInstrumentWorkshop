@@ -78,3 +78,10 @@ void printSerialHelp()
     
 }
 
+void printModes()
+{
+    printf("Modes:\r\n");
+    
+
+}
+
